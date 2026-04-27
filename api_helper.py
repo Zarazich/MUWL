@@ -35,9 +35,9 @@ def get_text_from_email(msg):
         return payload.decode(charset, errors="ignore")
 
 
-def receive(email, password, url="imap.yandex.com", port=993, latest=None):
+def receive(email_addr, password, url="imap.yandex.com", port=993, latest=None):
     mail = imaplib.IMAP4_SSL(url, port)
-    mail.login(email, password)
+    mail.login(email_addr, password)
     mail.select("INBOX")
     status, message_ids_bytes = mail.search(None, "ALL")
     if status != "OK":
