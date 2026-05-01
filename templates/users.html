@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+
+{% block title %}Пользователи{% endblock %}
+
+{% block content %}
+<h2>Список пользователей</h2>
+
+<form method="GET" action="/users/search">
+    <input type="text" name="q" placeholder="Поиск по имени или телефону">
+    <button type="submit">Найти</button>
+</form>
+
+{% if users %}
+    <ul>
+    {% for u in users %}
+        <li>
+            {{ u.full_name }} ({{ u.phone }})
+            <a href="/chat/{{ u.id }}">Написать</a>
+        </li>
+    {% endfor %}
+    </ul>
+{% else %}
+    <p>Пользователи не найдены</p>
+{% endif %}
+
+<p><a href="/">На главную</a></p>
+{% endblock %}

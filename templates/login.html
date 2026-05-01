@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+
+{% block title %}Вход{% endblock %}
+
+{% block content %}
+<h2>Вход</h2>
+
+<form method="POST" action="/api/login">
+    <div>
+        <label>Телефон:</label>
+        <input type="text" name="phone" required>
+    </div>
+    <div>
+        <label>Пароль:</label>
+        <input type="password" name="password" required>
+    </div>
+    <button type="submit">Войти</button>
+</form>
+
+<p>Нет аккаунта? <a href="/register">Зарегистрироваться</a></p>
+{% endblock %}

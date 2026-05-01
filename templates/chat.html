@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+
+{% block title %}{{ other_user.full_name }}{% endblock %}
+
+{% block content %}
+<h2>Чат с {{ other_user.full_name }}</h2>
+
+<h3>Отправить сообщение</h3>
+<form method="POST" action="/api/messages/send">
+    <input type="hidden" name="recipient_id" value="{{ other_user.id }}">
+    <textarea name="content" rows="3" cols="50" placeholder="Введите сообщение..." required></textarea>
+    <br>
+    <button type="submit">Отправить</button>
+</form>
+
+<h3>История переписки</h3>
+{% if messages %}
+{% for msg in messages %}
+<div>
+    <strong>
+        {% if msg.from == user.id %}
+        {{ msg.created_at }}:
+        {% else %}
+        {{ other_user.full_name }} {{ msg.created_at }}:
+        {% endif %}
+    </strong>
+    <p>{{ msg.content }}</p>
+    {% if msg.is_read %}
+    <small>Прочитано</small>
+    {% endif %}
+    <hr>
+</div>
+{% endfor %}
+{% else %}
+<p>Нет сообщений</p>
+{% endif %}
+
+<p><a href="/users">← Назад к списку пользователей</a></p>
+{% endblock %}

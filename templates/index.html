@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+
+{% block title %}Главная{% endblock %}
+
+{% block content %}
+<h2>Добро пожаловать, {{ user.full_name }}!</h2>
+
+<p>Телефон: {{ user.phone }}</p>
+
+<nav>
+    <ul>
+        <li><a href="/users">Список пользователей</a></li>
+        <li><a href="/messages/inbox">Входящие</a></li>
+        <li><a href="/messages/outbox">Отправленные</a></li>
+        <li><a href="/logout">Выйти</a></li>
+    </ul>
+</nav>
+{% endblock %}
