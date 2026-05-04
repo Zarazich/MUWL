@@ -56,6 +56,7 @@ def receive(email_addr, password, url="imap.yandex.com", port=993, latest=None):
 
     emails = []
     for i in id_list:
+        print(1)
         status, msg_data = mail.fetch(i, "(RFC822)")
         if status != "OK":
             continue
