@@ -13,6 +13,4 @@ def login_required(f):
 
 
 def get_current_user_id():
-    from flask import session
-
     return session.get('user_id')
