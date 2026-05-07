@@ -1,0 +1,69 @@
+
+{% extends "base.html" %}
+
+{% block title %}MUWL — Вход и регистрация{% endblock %}
+
+{% block content %}
+<div class="auth-container">
+    <div class="auth-card">
+        <div class="auth-tabs">
+            <input type="radio" name="auth-tab" id="tab-login" class="auth-tab-input" {% if active_tab != 'register' %}checked{% endif %}>
+            <label for="tab-login" class="auth-tab-label">Вход</label>
+
+            <input type="radio" name="auth-tab" id="tab-register" class="auth-tab-input" {% if active_tab == 'register' %}checked{% endif %}>
+            <label for="tab-register" class="auth-tab-label">Регистрация</label>
+
+            <div class="auth-tab-slider"></div>
+        </div>
+        <div class="auth-panel auth-panel-login">
+            {% if error and error_type == 'login' %}
+            <div class="alert alert-error">{{ error }}</div>
+            {% endif %}
+
+            <form method="POST" action="/api/login" class="auth-form">
+                <div class="form-group">
+                    <label class="form-label">Телефон</label>
+                    <input type="tel" name="phone" class="form-input" placeholder="+7 900 123-45-67" value="{{ phone or '' }}" required autocomplete="tel">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Пароль</label>
+                    <input type="password" name="password" class="form-input" placeholder="Введите пароль" required autocomplete="current-password">
+                </div>
+                <button type="submit" class="btn btn-primary btn-block">Войти</button>
+            </form>>
+        </div>
+        <div class="auth-panel auth-panel-register">
+            {% if error and error_type == 'register' %}
+            <div class="alert alert-error">{{ error }}</div>
+            {% endif %}
+
+            <form method="POST" action="/api/register" class="auth-form">
+                <div class="form-group">
+                    <label class="form-label">Имя</label>
+                    <input type="text" name="full_name" class="form-input" value="{{ full_name or '' }}" required autocomplete="name">
+                    <small class="form-hint">Как вас будут видеть другие пользователи</small>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Телефон</label>
+                    <input type="tel" name="phone" class="form-input" placeholder="+7 900 123-45-67" value="{{ phone or '' }}" required autocomplete="tel">
+                    <small class="form-hint">Только цифры, начинается с +7</small>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group half">
+                        <label class="form-label">Пароль</label>
+                        <input type="password" name="password" class="form-input" placeholder="Минимум 4 символа" required autocomplete="new-password">
+                    </div>
+                    <div class="form-group half">
+                        <label class="form-label">✓ Подтверждение</label>
+                        <input type="password" name="confirm_password" class="form-input" placeholder="Повторите пароль" required autocomplete="new-password">
+                    </div>
+                </div>
+
+                <button type="submit" class="btn btn-success btn-block">Создать аккаунт</button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %}
