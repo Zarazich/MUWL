@@ -106,3 +106,17 @@ def verify_password(password: str, hashed: str) -> bool:
         return test_hash == original_hash
     except Exception:
         return False
+
+
+def encrypt(password: str, data: bytes) -> bytes:
+    key = hashlib.sha256(password.encode()).digest()
+    fernet_key = base64.urlsafe_b64encode(key)
+    cipher = Fernet(fernet_key)
+    return cipher.encrypt(data)
+
+
+def decrypt(password: str, encrypted: bytes) -> bytes:
+    key = hashlib.sha256(password.encode()).digest()
+    fernet_key = base64.urlsafe_b64encode(key)
+    cipher = Fernet(fernet_key)
+    return cipher.decrypt(encrypted)
