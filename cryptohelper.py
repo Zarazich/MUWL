@@ -92,22 +92,6 @@ def hash_password(password: str) -> str:
     return base64.b64encode(combined).decode('utf-8')
 
 
-def verify_password(password: str, hashed: str) -> bool:
-    try:
-        combined = base64.b64decode(hashed)
-        salt = combined[:32]
-        original_hash = combined[32:]
-        kdf = PBKDF2HMAC(algorithm=hashes.SHA256(),
-                         length=64,
-                         salt=salt,
-                         iterations=200000,
-                         backend=default_backend())
-        test_hash = kdf.derive(password.encode('utf-8'))
-        return test_hash == original_hash
-    except Exception:
-        return False
-
-
 def encrypt(password: str, data: bytes) -> bytes:
     key = hashlib.sha256(password.encode()).digest()
     fernet_key = base64.urlsafe_b64encode(key)
