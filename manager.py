@@ -77,13 +77,9 @@ class manager:
                     for message in maybeMessage:
                         message = message.strip()
                         if validate_route(j["routekey"], j["route"], message):
-                            print(1)
+                            print("RECEIVED FROM")
                             self.data["chats"][x]["messages"].append(message)
                             self.data["chats"][x]["new"] = True
                         else:
                             print([message])
-
         self.save_config()
-                
-
-
