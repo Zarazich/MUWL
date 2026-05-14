@@ -77,10 +77,10 @@ class manager:
                 for x, j in enumerate(self.data["chats"]):
                     for message in maybeMessage:
                         if validate_route(j["routekey"], j["route"], message[0]):
-                            if message[0] not in self.data["chats"][x]["messages"]:
-                                self.data["chats"][x]["messages"].append(message[0])
+                            if (message[0], 0) not in self.data["chats"][x]["messages"]:
+                                self.data["chats"][x]["messages"].append((message[0], 0))
                                 if message[1] not in self.data["chats"][x]["emails"]:
-                                    self.data["chats"][x]["emails"].append((message[1], 0))
+                                    self.data["chats"][x]["emails"].append((message[1]))
                                 else:
                                     print("email in email list")
                                 self.data["chats"][x]["unreaden"] = True
@@ -113,7 +113,7 @@ class manager:
                 self.data["chats"][index]["unreaden"] = False
                 messages = chat["messages"]
                 try:
-                    enc_key = decrypt(password, chat["enckey"])
+                    enc_key = decrypt(password, chat["enckey"]).decode()
                     messages = list(map(lambda x: (decrypt_message(chat["routekey"], enc_key, x[0]), x[1]), messages))
                     self.save_config()
                     return (messages, name_of_chat)
@@ -121,7 +121,7 @@ class manager:
                     print(e)
         return None
     
-    def send_message(self, name_of_chat):
+    def send_message(self, name_of_chat, message, password):
         pass
 
 
