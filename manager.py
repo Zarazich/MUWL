@@ -4,7 +4,7 @@ from cryptohelper import encrypt_message, encrypt
 from cryptohelper import decrypt_message, decrypt
 from cryptohelper import validate_route
 from cryptohelper import hash_password
-from api_helper import receive
+from api_helper import receive, send
 import random
 
 
@@ -19,7 +19,8 @@ class manager:
         except Exception:
             self.data = {"hash": None,
                          "chats": [],
-                         "emails": []}
+                         "emails": [],
+                         "name": "USER"}
 
     def create_chat(self, password, name):
         if hash_password(password) != self.data["hash"] and not (password is None):
@@ -38,17 +39,18 @@ class manager:
         data["unreaden"] = False
         self.data["chats"].append(data.copy())
         self.save_config()
-        return enckey, data["routekey"], data["route"]
+        return (enckey, data["routekey"], data["route"], self.data["name"])
 
     def create_key(self) -> str:
         str0 = "qwertyuiopaasdfghjklzxcvbnm1234567890"
         str0 = list(str0)
         return "".join([str0[random.randint(0, len(str0) - 1)] for i in range(10)])
     
-    def setup(self, password):
+    def setup(self, password, name):
         if not self.data["hash"] is None:
             return
         self.data["hash"] = hash_password(password)
+        self.data["name"] = name
         self.ready = True
         self.save_config()
     
@@ -121,7 +123,24 @@ class manager:
                     print(e)
         return None
     
-    def send_message(self, name_of_chat, message, password):
-        pass
-
-
+    def send_message(self, name_of_chat, message, email_to, email_from, password):
+        if self.data["hash"] == hash_password(password) and not self.data["hash"] is None:
+            chat = [(x, i) for x, i in enumerate(self.data["chats"]) if i["name"] == name_of_chat]
+            if len(chat) == 0:
+                return None
+            email = [i for i in self.data["emails"] if i["email"] == email_from]
+            if len(email) == 0:
+                return None
+            email = email[0]
+            chat = chat[0]
+            indx = chat[0]
+            chat = chat[1]
+            enc_key = decrypt(password, chat["enckey"]).decode()
+            try:
+                encmessage = encrypt_message(enc_key, chat["routekey"], chat["route"], message)
+                send(email["email"], email_to, email["apikey"], encmessage)
+                print("ОТПРАВЛЕН", message, email_from, email_to)
+                self.data["chats"][indx]["messages"].append((encmessage, 1))
+                self.save_config()
+            except Exception:
+                pass
