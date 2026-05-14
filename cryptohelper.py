@@ -44,7 +44,7 @@ def _decrypt_part(encrypted_data: bytes, password: str) -> str:
     return plain_bytes.decode('utf-8')
 
 
-def encrypt_message(route_key: str, message_key: str, chat_id: str, message: str) -> str:
+def encrypt_message(message_key: str, route_key: str, chat_id: str, message: str) -> str:
     encrypted_route = _encrypt_part(chat_id, route_key)
     encrypted_message = _encrypt_part(message, message_key)
     route_len = len(encrypted_route)

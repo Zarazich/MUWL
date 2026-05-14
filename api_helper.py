@@ -49,7 +49,7 @@ def receive(email_addr, password, url="imap.yandex.com", port=993, latest_uid=No
     if not uid_list:
         mail.logout()
         return [], latest_uid or 0
-    bodies = []
+    messages = []   # список кортежей (body, from_email)
     max_uid = latest_uid or 0
     for uid in uid_list:
         status, msg_data = mail.uid('fetch', uid, "(RFC822)")
@@ -58,10 +58,11 @@ def receive(email_addr, password, url="imap.yandex.com", port=993, latest_uid=No
         raw_email = msg_data[0][1]
         msg = email.message_from_bytes(raw_email)
         body = get_text_from_email(msg)
-        bodies.append(body)
+        from_addr = msg.get('From')   # или email.utils.parseaddr(msg['From'])[1]
+        messages.append((body, from_addr))
         uid_int = int(uid)
         if uid_int > max_uid:
             max_uid = uid_int
     mail.close()
     mail.logout()
-    return bodies, max_uid
+    return messages, max_uid

@@ -69,17 +69,59 @@ class manager:
     
     def receive(self):
         for y, i in enumerate(self.data["emails"]):
-            if 1:
+            try:
                 maybeMessage, lastuid = receive(i["email"], i["apikey"], latest_uid=i["lastuid"])
                 self.data["emails"][y]["new"] = True
                 self.data["emails"][y]["lastuid"] = lastuid
+                print(lastuid)
                 for x, j in enumerate(self.data["chats"]):
                     for message in maybeMessage:
-                        message = message.strip()
-                        if validate_route(j["routekey"], j["route"], message):
-                            print("RECEIVED FROM")
-                            self.data["chats"][x]["messages"].append(message)
-                            self.data["chats"][x]["new"] = True
+                        if validate_route(j["routekey"], j["route"], message[0]):
+                            if message[0] not in self.data["chats"][x]["messages"]:
+                                self.data["chats"][x]["messages"].append(message[0])
+                                if message[1] not in self.data["chats"][x]["emails"]:
+                                    self.data["chats"][x]["emails"].append((message[1], 0))
+                                else:
+                                    print("email in email list")
+                                self.data["chats"][x]["new"] = True
+                                print(f"receive new to { self.data['chats'][x]['name']}, FROM {message[1]}")
+                            else:
+                                print("receive copy")
                         else:
-                            print([message])
+                            print("refused")
+                            print(j["routekey"], j["route"])
+            except Exception as e:
+                print(e)
         self.save_config()
+    
+    def update(self):
+        data = []
+        for i in self.data["chats"]:
+            if i["new"]:
+                data.append(i["name"])
+        return data
+    
+    def get_messages_from_chat(self, name_of_chat, password):
+        if self.hash == hash_password(password) and self.hash not is None:
+            index, chat = [x, i for x, i in enumerate(self.data["chats"]) if i["name"] == name_of_chat]
+            if len(chat) == 0:
+                return None
+            else:
+                self.data["chats"][index]["new"] = False
+                return chat["messages"]
+        return None
+    
+    def send_message(self, name_of_chat):
+        pass
+
+
+if __name__ == "__main__":
+    m = manager("config.json")
+    m.setup("1234")
+    print(m.create_chat("1234", "name"))
+    print(m.setup_email("danil.nepomeishy@yandex.ru", "knmeyixyuqgojumt"))
+    if 1:
+        while True:
+            m.receive()
+            import time
+            time.sleep(1)
