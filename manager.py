@@ -113,15 +113,3 @@ class manager:
     
     def send_message(self, name_of_chat):
         pass
-
-
-if __name__ == "__main__":
-    m = manager("config.json")
-    m.setup("1234")
-    print(m.create_chat("1234", "name"))
-    print(m.setup_email("danil.nepomeishy@yandex.ru", "knmeyixyuqgojumt"))
-    if 1:
-        while True:
-            m.receive()
-            import time
-            time.sleep(1)
