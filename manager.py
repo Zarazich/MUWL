@@ -71,7 +71,7 @@ class manager:
         for y, i in enumerate(self.data["emails"]):
             try:
                 maybeMessage, lastuid = receive(i["email"], i["apikey"], latest_uid=i["lastuid"])
-                self.data["emails"][y]["new"] = True
+                self.data["emails"][y]["unreaden"] = True
                 self.data["emails"][y]["lastuid"] = lastuid
                 print(lastuid)
                 for x, j in enumerate(self.data["chats"]):
@@ -83,7 +83,7 @@ class manager:
                                     self.data["chats"][x]["emails"].append((message[1], 0))
                                 else:
                                     print("email in email list")
-                                self.data["chats"][x]["new"] = True
+                                self.data["chats"][x]["unreaden"] = True
                                 print(f"receive new to { self.data['chats'][x]['name']}, FROM {message[1]}")
                             else:
                                 print("receive copy")
@@ -97,12 +97,12 @@ class manager:
     def update(self):
         data = []
         for i in self.data["chats"]:
-            if i["new"]:
+            if i["unreaden"]:
                 data.append(i["name"])
         return data
     
     def get_messages_from_chat(self, name_of_chat, password):
-        if self.hash == hash_password(password) and self.hash not is None:
+        if self.data["hash"] == hash_password(password) and not self.data["hash"] is None:
             chat = [(x, i) for x, i in enumerate(self.data["chats"]) if i["name"] == name_of_chat]
             if len(chat) == 0:
                 return None
@@ -110,21 +110,18 @@ class manager:
                 chat = chat[0]
                 index = chat[0]
                 chat = chat[1]
-                self.data["chats"][index]["new"] = False
-                return chat["messages"]
+                self.data["chats"][index]["unreaden"] = False
+                messages = chat["messages"]
+                try:
+                    enc_key = decrypt(password, chat["enckey"])
+                    messages = list(map(lambda x: (decrypt_message(chat["routekey"], enc_key, x[0]), x[1]), messages))
+                    self.save_config()
+                    return (messages, name_of_chat)
+                except Exception as e:
+                    print(e)
         return None
     
     def send_message(self, name_of_chat):
         pass
 
 
-if __name__ == "__main__":
-    m = manager("config.json")
-    m.setup("1234")
-    print(m.create_chat("1234", "name"))
-    print(m.setup_email("danil.nepomeishy@yandex.ru", "knmeyixyuqgojumt"))
-    if 1:
-        while True:
-            m.receive()
-            import time
-            time.sleep(1)
