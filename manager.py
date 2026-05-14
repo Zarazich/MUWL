@@ -103,13 +103,28 @@ class manager:
     
     def get_messages_from_chat(self, name_of_chat, password):
         if self.hash == hash_password(password) and self.hash not is None:
-            index, chat = [x, i for x, i in enumerate(self.data["chats"]) if i["name"] == name_of_chat]
+            chat = [(x, i) for x, i in enumerate(self.data["chats"]) if i["name"] == name_of_chat]
             if len(chat) == 0:
                 return None
             else:
+                chat = chat[0]
+                index = chat[0]
+                chat = chat[1]
                 self.data["chats"][index]["new"] = False
                 return chat["messages"]
         return None
     
     def send_message(self, name_of_chat):
         pass
+
+
+if __name__ == "__main__":
+    m = manager("config.json")
+    m.setup("1234")
+    print(m.create_chat("1234", "name"))
+    print(m.setup_email("danil.nepomeishy@yandex.ru", "knmeyixyuqgojumt"))
+    if 1:
+        while True:
+            m.receive()
+            import time
+            time.sleep(1)
