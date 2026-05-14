@@ -5,6 +5,8 @@ from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.backends import default_backend
+import hashlib
+from cryptography.fernet import Fernet
 
 
 def _derive_key(password: str, salt: bytes, length: int = 32, iterations: int = 100000) -> bytes:
@@ -81,15 +83,10 @@ def decrypt_message(route_key: str, message_key: str, encrypted_packet_b64: str)
 
 
 def hash_password(password: str) -> str:
-    salt = os.urandom(32)
-    kdf = PBKDF2HMAC(algorithm=hashes.SHA256(),
-                     length=64,
-                     salt=salt,
-                     iterations=200000,
-                     backend=default_backend())
-    pwd_hash = kdf.derive(password.encode('utf-8'))
-    combined = salt + pwd_hash
-    return base64.b64encode(combined).decode('utf-8')
+    algorithm=hashes.SHA256()
+    digest = hashes.Hash(algorithm, backend=default_backend())
+    digest.update(password.encode('utf-8'))
+    return str(digest.finalize().hex())
 
 
 def encrypt(password: str, data: bytes) -> bytes:

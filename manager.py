@@ -1,124 +1,98 @@
+import cryptography
 import json
-import os
+from cryptohelper import encrypt_message, encrypt
+from cryptohelper import decrypt_message, decrypt
+from cryptohelper import validate_route
+from cryptohelper import hash_password
+from api_helper import receive
 import random
-import base64
-from typing import List, Tuple, Dict
-
-from api_helper import receive as imap_receive
-from cryptohelper import (
-    encrypt_message, decrypt_message, validate_route,
-    hash_password, verify_password,
-    encrypt, decrypt
-)
 
 
-class ManagerError(Exception):
-    pass
-
-
-class NotSetupError(ManagerError):
-    pass
-
-
-class InvalidPasswordError(ManagerError):
-    pass
-
-
-class Manager:
-    def __init__(self, config_path: str):
-        self.config_path = config_path
-        self.config = self._load_config()
-
-    def _load_config(self) -> dict:
-        default_config = {
-            "hash": None,
-            "emails": [],
-            "last_uids": {},
-            "chats": []
-        }
-        if not os.path.exists(self.config_path):
-            return default_config
+class manager:
+    def __init__(self, path_to_conf):
+        self.pwd = path_to_conf 
+        self.ready = False
         try:
-            with open(self.config_path, 'r', encoding='utf-8') as f:
-                config = json.load(f)
-            for key, value in default_config.items():
-                if key not in config:
-                    config[key] = value
-            return config
-        except (json.JSONDecodeError, IOError):
-            backup_path = self.config_path + ".backup"
-            try:
-                os.rename(self.config_path, backup_path)
-            except Exception:
-                pass
-            return default_config
+            with open(path_to_conf, "r") as f:
+                self.data = json.load(f)
+            self.ready = True
+        except Exception:
+            self.data = {"hash": None,
+                         "chats": [],
+                         "emails": []}
 
-    def _save_config(self):
-        with open(self.config_path, 'w', encoding='utf-8') as f:
-            json.dump(self.config, f, indent=2, ensure_ascii=False)
-
-    def setup(self, password: str):
-        if self.config["hash"] is not None:
-            raise ManagerError("Master password already set")
-        self.config["hash"] = hash_password(password)
-        self._save_config()
-
-    def valid_passwd(self, password: str) -> bool:
-        if self.config["hash"] is None:
-            return False
-        return verify_password(password, self.config["hash"])
+    def create_chat(self, password, name):
+        if hash_password(password) != self.data["hash"] and not (password is None):
+            print(1, password, self.data["hash"] == hash_password(password))
+            return
+        if name == "" or name is None or name in [j["name"] for j in self.data["chats"]]:
+            return
+        data = {}
+        data["name"] = name
+        data["routekey"] = self.create_key()
+        enckey = self.create_key()
+        data["enckey"] = encrypt(password, enckey.encode()).decode()
+        data["route"] = self.create_key()
+        data["emails"] = []
+        data["messages"] = []
+        data["unreaden"] = False
+        self.data["chats"].append(data.copy())
+        self.save_config()
+        return enckey, data["routekey"], data["route"]
 
     def create_key(self) -> str:
-        chars = "qwertyuiopaasdfghjklzxcvbnm1234567890"
-        return ''.join(random.choice(chars) for _ in range(16))
+        str0 = "qwertyuiopaasdfghjklzxcvbnm1234567890"
+        str0 = list(str0)
+        return "".join([str0[random.randint(0, len(str0) - 1)] for i in range(10)])
+    
+    def setup(self, password):
+        if not self.data["hash"] is None:
+            return
+        self.data["hash"] = hash_password(password)
+        self.ready = True
+        self.save_config()
+    
+    def setup_email(self, email, apikey):
+        if email in [i["email"] for i in self.data["emails"]]:
+            return False
+        self.data["emails"].append({"email": email,
+                                    "apikey": apikey,
+                                    "lastuid": None})
+        self.save_config()
+        return True
 
-    def create_chat(self, master_password: str) -> Tuple[str, str]:
-        if self.config["hash"] is None:
-            raise NotSetupError("Manager not set up. Call setup() first.")
-        if not self.valid_passwd(master_password):
-            raise InvalidPasswordError("Wrong master password")
-        indx = self.create_key()
-        indxkey = self.create_key()
-        message_key = self.create_key()
-        encrypted_key = encrypt(master_password, message_key.encode('utf-8'))
-        key_enc = base64.b64encode(encrypted_key).decode('utf-8')
-        new_chat = {
-            "indx": indx,
-            "indxkey": indxkey,
-            "key_enc": key_enc,
-            "messages": [],
-            "new": False
-        }
-        self.config["chats"].append(new_chat)
-        self._save_config()
-        return indxkey, indx
+    def save_config(self):
+        if not self.ready:
+            return
+        with open(self.pwd, "w") as f:
+            json.dump(self.data, f)
+    
+    def receive(self):
+        for y, i in enumerate(self.data["emails"]):
+            if 1:
+                maybeMessage, lastuid = receive(i["email"], i["apikey"], latest_uid=i["lastuid"])
+                self.data["emails"][y]["new"] = True
+                self.data["emails"][y]["lastuid"] = lastuid
+                for x, j in enumerate(self.data["chats"]):
+                    for message in maybeMessage:
+                        message = message.strip()
+                        if validate_route(j["routekey"], j["route"], message):
+                            print(1)
+                            self.data["chats"][x]["messages"].append(message)
+                            self.data["chats"][x]["new"] = True
+                        else:
+                            print([message])
 
-    def receive(self, master_password: str) -> None:
-        if self.config["hash"] is None:
-            raise NotSetupError("Manager not set up")
-        if not self.valid_passwd(master_password):
-            raise InvalidPasswordError("Wrong master password")
-        chat_keys = []
-        for chat in self.config["chats"]:
-            indx = chat["indx"]
-            indxkey = chat["indxkey"]
-            enc_key = base64.b64decode(chat["key_enc"])
-            msg_key = decrypt(master_password, enc_key).decode('utf-8')
-            chat_keys.append((indx, indxkey, msg_key))
-        for email, apikey in self.config["emails"]:
-            last_uid = self.config["last_uids"].get(email, 0)
-            bodies, new_uid = imap_receive(email, apikey, latest_uid=last_uid)
-            self.config["last_uids"][email] = new_uid
-            for packet_b64 in bodies:
-                for indx, indxkey, msg_key in chat_keys:
-                    if validate_route(indxkey, indx, packet_b64):
-                        plaintext = decrypt_message(indxkey, msg_key, packet_b64)
-                        enc_for_storage = encrypt(master_password, plaintext.encode('utf-8'))
-                        enc_for_storage_b64 = base64.b64encode(enc_for_storage).decode('utf-8')
-                        for chat in self.config["chats"]:
-                            if chat["indx"] == indx:
-                                chat["messages"].append(enc_for_storage_b64)
-                                chat["new"] = True
-                                break
-                        break
-        self._save_config()
+        self.save_config()
+                
+
+
+if __name__ == "__main__":
+    m = manager("config.json")
+    m.setup("1234")
+    print(m.create_chat("1234", "name"))
+    print(m.setup_email("danil.nepomeishy@yandex.ru", "knmeyixyuqgojumt"))
+    while True:
+        import time
+        time.sleep(2)
+        m.receive()
