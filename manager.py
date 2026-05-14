@@ -87,12 +87,3 @@ class manager:
                 
 
 
-if __name__ == "__main__":
-    m = manager("config.json")
-    m.setup("1234")
-    print(m.create_chat("1234", "name"))
-    print(m.setup_email("danil.nepomeishy@yandex.ru", "knmeyixyuqgojumt"))
-    while True:
-        import time
-        time.sleep(2)
-        m.receive()
