@@ -741,3 +741,8 @@ body {
     border-color: var(--primary);
     transform: scale(1.05);
 }
+.alert-info-custom {
+    background: #E5F0FF;
+    color: #0044CC;
+    border: 1px solid #B3D4FF;
+}

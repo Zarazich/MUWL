@@ -23,7 +23,7 @@
 
             <!-- Content -->
             <div class="app-content">
-                <!-- Регистрация -->
+                <!-- Регистрация (первичная настройка) -->
                 <div id="setupSection">
                     <div class="auth-container">
                         <div class="auth-card">
@@ -63,51 +63,40 @@
                                     <input type="password" id="loginPassword" class="form-input" placeholder="Введите мастер-пароль" required>
                                 </div>
                                 <div id="loginError" class="alert-custom alert-danger-custom" style="display: none;"></div>
-                                <button type="submit" class="btn-primary-custom">Войти</button>
+                                <div class="d-flex gap-2">
+                                    <button type="submit" class="btn-primary-custom">Войти</button>
+                                    <button type="button" class="btn-warning-custom" onclick="showNewPasswordModal()">Создать новый пароль</button>
+                                </div>
                             </form>
-                            <div class="text-center mt-4">
-                                <button class="btn btn-link text-warning" onclick="showForgotPassword()" style="text-decoration: none; font-weight: 600;">
-                                    <i class="bi bi-key"></i> Забыли пароль?
-                                </button>
-                            </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Забыл пароль -->
-                <div id="forgotSection" style="display: none;">
-                    <div class="auth-container">
-                        <div class="auth-card">
-                            <div class="auth-icon">🔄</div>
-                            <div class="auth-title">Восстановление доступа</div>
-                            <div class="auth-subtitle">Чаты и контакты сохранятся, но старые сообщения будут недоступны</div>
-                            <div class="alert-custom alert-warning-custom">
-                                <i class="bi bi-exclamation-triangle"></i>
-                                <strong>Важно:</strong> Сообщения зашифрованы старым ключом и не будут расшифрованы
-                            </div>
-                            <form id="forgotForm">
-                                <div class="form-group">
-                                    <label class="form-label">Ваше имя</label>
-                                    <input type="text" id="forgotName" class="form-input" placeholder="Введите имя" required>
-                                </div>
-                                <div class="form-group">
-                                    <label class="form-label">Новый мастер-пароль</label>
-                                    <input type="password" id="forgotPassword" class="form-input" placeholder="Придумайте новый пароль" required>
-                                </div>
-                                <div class="form-group">
-                                    <label class="form-label">Подтверждение пароля</label>
-                                    <input type="password" id="forgotConfirmPassword" class="form-input" placeholder="Повторите новый пароль" required>
-                                </div>
-                                <div id="forgotError" class="alert-custom alert-danger-custom" style="display: none;"></div>
-                                <div id="forgotSuccess" class="alert-custom alert-success-custom" style="display: none;"></div>
-                                <button type="submit" class="btn-warning-custom">Сбросить пароль и сохранить чаты</button>
-                            </form>
-                            <div class="text-center mt-3">
-                                <button class="btn btn-link" onclick="showLogin()" style="text-decoration: none;">
-                                    <i class="bi bi-arrow-left"></i> Назад ко входу
-                                </button>
-                            </div>
+                <!-- Модальное окно для создания нового пароля (без удаления старого) -->
+                <div id="newPasswordModal" class="modal-overlay" style="display: none;">
+                    <div class="modal-content-custom">
+                        <div class="modal-header">
+                            <h3>🔑 Создать новый пароль</h3>
+                            <button class="modal-close" onclick="closeModal('newPasswordModal')">&times;</button>
                         </div>
+                        <div class="alert-custom alert-warning-custom">
+                            <i class="bi bi-exclamation-triangle"></i>
+                            <strong>Внимание:</strong> Новый пароль будет использоваться для новых сообщений.<br>
+                            Старые сообщения останутся зашифрованы старым паролем и станут недоступны.<br>
+                            Старый пароль не удаляется, но войти с ним будет нельзя.
+                        </div>
+                        <form id="newPasswordForm">
+                            <div class="form-group">
+                                <label class="form-label">Новый мастер-пароль</label>
+                                <input type="password" id="newPassword" class="form-input" placeholder="Придумайте новый пароль" required>
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label">Подтверждение пароля</label>
+                                <input type="password" id="newPasswordConfirm" class="form-input" placeholder="Повторите пароль" required>
+                            </div>
+                            <div id="newPasswordError" class="alert-custom alert-danger-custom" style="display: none;"></div>
+                            <button type="submit" class="btn-warning-custom">Установить новый пароль</button>
+                        </form>
                     </div>
                 </div>
 
@@ -136,7 +125,6 @@
                                 <div>
                                     <div class="chat-user-name" id="chatName">Выберите чат</div>
                                 </div>
-                                <!-- Кнопка экспорта чата -->
                                 <button class="btn btn-sm btn-outline-secondary ms-auto" id="exportBtn"
                                         onclick="exportCurrentChat()" style="display: none;"
                                         title="Экспортировать чат в JSON">
@@ -233,7 +221,7 @@
                         </div>
                         <div id="exportStatus" class="alert-custom alert-success-custom" style="display: none;"></div>
 
-                        <h5 class="mb-3">Экспортировать текущий чат</h5>
+                        <h5 class="mb-3">Экспортировать чат</h5>
                         <div class="mb-3">
                             <label class="form-label">Чат</label>
                             <select id="exportChatSelect" class="form-input">
@@ -250,6 +238,24 @@
                         <div id="exportsList">
                             <p class="text-muted">Загрузка...</p>
                         </div>
+
+                        <hr>
+
+                        <h5 class="mb-3">Импорт переписки из JSON</h5>
+                        <div class="mb-3">
+                            <label class="form-label">Выберите чат для импорта</label>
+                            <select id="importChatSelect" class="form-input">
+                                <option value="">Выберите чат...</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">JSON файл с перепиской</label>
+                            <input type="file" id="importFile" class="form-input" accept=".json">
+                        </div>
+                        <button class="btn-primary-custom" onclick="importChat()">
+                            <i class="bi bi-upload"></i> Импортировать чат
+                        </button>
+                        <div id="importStatus" class="alert-custom mt-3" style="display: none;"></div>
                     </div>
                 </div>
             </div>
@@ -316,6 +322,8 @@
                         showLogin();
                         document.getElementById('loginError').textContent = 'Неверный пароль';
                         document.getElementById('loginError').style.display = 'block';
+                        // Очищаем поле пароля
+                        document.getElementById('loginPassword').value = '';
                     } else {
                         alert('Ошибка: ' + (data.error || 'Неизвестная ошибка'));
                     }
@@ -325,7 +333,6 @@
         function showSetup() {
             document.getElementById('setupSection').style.display = 'block';
             document.getElementById('loginSection').style.display = 'none';
-            document.getElementById('forgotSection').style.display = 'none';
             document.getElementById('mainSection').style.display = 'none';
             updateHeaderButtons('setup');
         }
@@ -333,23 +340,23 @@
         function showLogin() {
             document.getElementById('setupSection').style.display = 'none';
             document.getElementById('loginSection').style.display = 'block';
-            document.getElementById('forgotSection').style.display = 'none';
             document.getElementById('mainSection').style.display = 'none';
+            // Очищаем поле пароля при показе
+            document.getElementById('loginPassword').value = '';
+            document.getElementById('loginError').style.display = 'none';
             updateHeaderButtons('login');
         }
 
-        function showForgotPassword() {
-            document.getElementById('setupSection').style.display = 'none';
-            document.getElementById('loginSection').style.display = 'none';
-            document.getElementById('forgotSection').style.display = 'block';
-            document.getElementById('mainSection').style.display = 'none';
-            updateHeaderButtons('forgot');
+        function showNewPasswordModal() {
+            document.getElementById('newPasswordModal').style.display = 'flex';
+            document.getElementById('newPassword').value = '';
+            document.getElementById('newPasswordConfirm').value = '';
+            document.getElementById('newPasswordError').style.display = 'none';
         }
 
         function showMain(data) {
             document.getElementById('setupSection').style.display = 'none';
             document.getElementById('loginSection').style.display = 'none';
-            document.getElementById('forgotSection').style.display = 'none';
             document.getElementById('mainSection').style.display = 'block';
             updateHeaderButtons('main');
 
@@ -625,8 +632,6 @@
             win.document.write(`<img src="${src}" style="max-width: 100%; height: auto;">`);
         }
 
-        // Экспорт чатов в json
-
         function exportCurrentChat() {
             const chatName = document.getElementById('chatName').textContent;
             if (!chatName || chatName === 'Выберите чат') {
@@ -642,9 +647,14 @@
             if (!currentPassword) return;
 
             const exportSelect = document.getElementById('exportChatSelect');
+            const importSelect = document.getElementById('importChatSelect');
+
             exportSelect.innerHTML = '<option value="">Выберите чат...</option>';
+            importSelect.innerHTML = '<option value="">Выберите чат...</option>';
+
             for (let chat of currentChats) {
                 exportSelect.innerHTML += `<option value="${escapeHtml(chat.name)}">${escapeHtml(chat.name)}</option>`;
+                importSelect.innerHTML += `<option value="${escapeHtml(chat.name)}">${escapeHtml(chat.name)}</option>`;
             }
 
             fetch(`/list_exports?password=${encodeURIComponent(currentPassword)}`)
@@ -705,7 +715,6 @@
                         statusDiv.style.display = 'block';
                         loadExportsList();
 
-                        // Предлагаем скачать
                         if (confirm(data.message + '\n\nСкачать файл?')) {
                             downloadExport(data.filename);
                         }
@@ -738,6 +747,60 @@
                     } else {
                         alert('Ошибка: ' + data.error);
                     }
+                });
+        }
+
+        function importChat() {
+            if (!currentPassword) {
+                alert('Необходимо войти');
+                return;
+            }
+
+            const chatName = document.getElementById('importChatSelect').value;
+            const fileInput = document.getElementById('importFile');
+            const file = fileInput.files[0];
+
+            if (!chatName) {
+                alert('Выберите чат для импорта');
+                return;
+            }
+
+            if (!file) {
+                alert('Выберите JSON файл');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('password', currentPassword);
+            formData.append('chat_name', chatName);
+            formData.append('mode', 'append');
+            formData.append('file', file);
+
+            const statusDiv = document.getElementById('importStatus');
+            statusDiv.style.display = 'block';
+            statusDiv.className = 'alert-custom alert-info-custom';
+            statusDiv.textContent = 'Импорт...';
+
+            fetch('/import_chat', {method: 'POST', body: formData})
+                .then(res => res.json())
+                .then(data => {
+                    if (data.status === 'ok') {
+                        statusDiv.className = 'alert-custom alert-success-custom';
+                        statusDiv.textContent = `Импортировано ${data.imported} из ${data.total} сообщений в чат "${data.chat_name}"`;
+                        refreshChats();
+                        const currentChat = document.getElementById('currentChatId').value;
+                        if (currentChat === chatName) {
+                            loadChat(chatName);
+                        }
+                        fileInput.value = '';
+                    } else {
+                        statusDiv.className = 'alert-custom alert-danger-custom';
+                        statusDiv.textContent = 'Ошибка: ' + data.error;
+                    }
+                })
+                .catch(err => {
+                    statusDiv.className = 'alert-custom alert-danger-custom';
+                    statusDiv.textContent = 'Ошибка: ' + err;
                 });
         }
 
@@ -831,8 +894,31 @@
             return div.innerHTML;
         }
 
-        // === FORM HANDLERS ===
+        // Обработчик формы входа
+        document.getElementById('loginForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const password = document.getElementById('loginPassword').value;
 
+            const formData = new FormData();
+            formData.append('password', password);
+
+            fetch('/login', {method: 'POST', body: formData})
+                .then(res => res.json())
+                .then(data => {
+                    if (data.status === 'ok') {
+                        currentPassword = password;
+                        document.getElementById('loginError').style.display = 'none';
+                        document.getElementById('loginPassword').value = ''; // Очищаем поле пароля
+                        loadDataWithPassword(password);
+                    } else {
+                        document.getElementById('loginError').textContent = 'Неверный пароль';
+                        document.getElementById('loginError').style.display = 'block';
+                        document.getElementById('loginPassword').value = ''; // Очищаем поле пароля
+                    }
+                });
+        });
+
+        // Обработчик формы первичной настройки
         document.getElementById('setupForm').addEventListener('submit', function(e) {
             e.preventDefault();
             const password = document.getElementById('setupPassword').value;
@@ -862,60 +948,39 @@
                 });
         });
 
-        document.getElementById('loginForm').addEventListener('submit', function(e) {
+        // Обработчик формы нового пароля (без удаления старого)
+        document.getElementById('newPasswordForm').addEventListener('submit', function(e) {
             e.preventDefault();
-            const password = document.getElementById('loginPassword').value;
+            const newPassword = document.getElementById('newPassword').value;
+            const confirm = document.getElementById('newPasswordConfirm').value;
 
-            const formData = new FormData();
-            formData.append('password', password);
+            if (newPassword !== confirm) {
+                document.getElementById('newPasswordError').textContent = 'Пароли не совпадают';
+                document.getElementById('newPasswordError').style.display = 'block';
+                return;
+            }
 
-            fetch('/login', {method: 'POST', body: formData})
-                .then(res => res.json())
-                .then(data => {
-                    if (data.status === 'ok') {
-                        currentPassword = password;
-                        document.getElementById('loginError').style.display = 'none';
-                        loadDataWithPassword(password);
-                    } else {
-                        document.getElementById('loginError').textContent = 'Неверный пароль';
-                        document.getElementById('loginError').style.display = 'block';
-                    }
-                });
-        });
-
-        document.getElementById('forgotForm').addEventListener('submit', function(e) {
-            e.preventDefault();
-            const password = document.getElementById('forgotPassword').value;
-            const confirm = document.getElementById('forgotConfirmPassword').value;
-            const name = document.getElementById('forgotName').value.trim();
-
-            if (password !== confirm) {
-                document.getElementById('forgotError').textContent = 'Пароли не совпадают';
-                document.getElementById('forgotError').style.display = 'block';
-                document.getElementById('forgotSuccess').style.display = 'none';
+            if (newPassword.length < 4) {
+                document.getElementById('newPasswordError').textContent = 'Пароль должен быть не менее 4 символов';
+                document.getElementById('newPasswordError').style.display = 'block';
                 return;
             }
 
             const formData = new FormData();
-            formData.append('password', password);
-            formData.append('name', name || 'USER');
+            formData.append('password', newPassword);
+            formData.append('name', 'USER');
 
-            fetch('/forgot_password', {method: 'POST', body: formData})
+            fetch('/register', {method: 'POST', body: formData})
                 .then(res => res.json())
                 .then(data => {
                     if (data.status === 'ok') {
-                        currentPassword = password;
-                        document.getElementById('forgotError').style.display = 'none';
-                        document.getElementById('forgotSuccess').innerHTML =
-                            '✅ Пароль изменён! Чатов: ' + data.chats_count +
-                            ', Email: ' + data.emails_count;
-                        document.getElementById('forgotSuccess').style.display = 'block';
-
-                        setTimeout(() => loadDataWithPassword(password), 1500);
+                        closeModal('newPasswordModal');
+                        alert('Новый пароль установлен! Войдите с новым паролем.\n\nСтарый пароль больше не работает, но старые сообщения остались зашифрованы.');
+                        document.getElementById('loginPassword').value = '';
+                        showLogin();
                     } else {
-                        document.getElementById('forgotError').textContent = 'Ошибка: ' + data.error;
-                        document.getElementById('forgotError').style.display = 'block';
-                        document.getElementById('forgotSuccess').style.display = 'none';
+                        document.getElementById('newPasswordError').textContent = 'Ошибка: ' + data.error;
+                        document.getElementById('newPasswordError').style.display = 'block';
                     }
                 });
         });

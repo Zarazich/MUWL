@@ -26,9 +26,9 @@ class manager:
             return
 
         if (
-            name == ""
-            or name is None
-            or name in [j["name"] for j in self.data["chats"]]
+                name == ""
+                or name is None
+                or name in [j["name"] for j in self.data["chats"]]
         ):
             return
 
@@ -97,7 +97,7 @@ class manager:
                                     print("email in email list")
                                 self.data["chats"][x]["unreaden"] = True
                                 print(
-                                    f"receive new to { self.data['chats'][x]['name']}, FROM {message[1]}"
+                                    f"receive new to {self.data['chats'][x]['name']}, FROM {message[1]}"
                                 )
                             else:
                                 print("receive copy")
@@ -120,8 +120,8 @@ class manager:
 
     def get_messages_from_chat(self, name_of_chat, password):
         if (
-            self.data["hash"] == hash_password(password)
-            and not self.data["hash"] is None
+                self.data["hash"] == hash_password(password)
+                and not self.data["hash"] is None
         ):
             chat = [
                 (x, i)
@@ -158,8 +158,8 @@ class manager:
 
     def send_message(self, name_of_chat, message, email_to, email_from, password):
         if (
-            self.data["hash"] == hash_password(password)
-            and not self.data["hash"] is None
+                self.data["hash"] == hash_password(password)
+                and not self.data["hash"] is None
         ):
             chat = [
                 (x, i)
@@ -196,3 +196,26 @@ class manager:
         hashed = hash_password(password)
         stored = self.data["hash"]
         return hashed == stored
+
+    def decrypt_chat_key(self, name_of_chat, password):
+        if self.data.get("hash") is None:
+            return None
+
+        if hash_password(password) != self.data["hash"]:
+            return None
+
+        chat = None
+        for c in self.data.get("chats", []):
+            if c.get("name") == name_of_chat:
+                chat = c
+                break
+
+        if not chat:
+            return None
+
+        try:
+            enc_key = decrypt(password, chat["enckey"]).decode()
+            return enc_key
+        except Exception as e:
+            print(f"decrypt_chat_key error: {e}")
+            return None
