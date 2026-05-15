@@ -26,9 +26,9 @@ class manager:
             return
 
         if (
-                name == ""
-                or name is None
-                or name in [j["name"] for j in self.data["chats"]]
+            name == ""
+            or name is None
+            or name in [j["name"] for j in self.data["chats"]]
         ):
             return
 
@@ -120,8 +120,8 @@ class manager:
 
     def get_messages_from_chat(self, name_of_chat, password):
         if (
-                self.data["hash"] == hash_password(password)
-                and not self.data["hash"] is None
+            self.data["hash"] == hash_password(password)
+            and not self.data["hash"] is None
         ):
             chat = [
                 (x, i)
@@ -158,8 +158,8 @@ class manager:
 
     def send_message(self, name_of_chat, message, email_to, email_from, password):
         if (
-                self.data["hash"] == hash_password(password)
-                and not self.data["hash"] is None
+            self.data["hash"] == hash_password(password)
+            and not self.data["hash"] is None
         ):
             chat = [
                 (x, i)
