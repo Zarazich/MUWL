@@ -6,6 +6,7 @@ from cryptohelper import validate_route
 from cryptohelper import hash_password
 from api_helper import receive, send
 import random
+from random import choice
 
 
 class manager:
@@ -39,7 +40,7 @@ class manager:
         data["unreaden"] = False
         self.data["chats"].append(data.copy())
         self.save_config()
-        return (enckey, data["routekey"], data["route"], self.data["name"])
+        return (enckey, data["routekey"], data["route"], self.data["name"], choice(self.data["emails"]))
 
     def create_key(self) -> str:
         str0 = "qwertyuiopaasdfghjklzxcvbnm1234567890"
@@ -144,3 +145,36 @@ class manager:
                 self.save_config()
             except Exception:
                 pass
+    
+    def add_chat_from(password, data, from_file=False, file=None):
+        if (hash_password(password) == self.data["hash"] or not data["hash"] is None):
+            return False
+        try:
+            if from_file:
+                with open(file, "r") as f:
+                    data = json.load(f)
+        except Exception as e:
+            print(e)
+            return False
+        if not ("enckey" in data.keys() and 
+                "routekey" in data.keys() and
+                "route" in data.keys() and
+                "email" in data.keys() and
+                "name" in data.keys()):
+            return False
+        self.data["chats"]
+        enckey = data["enckey"]
+        routekey = data["routekey"]
+        route = data["route"]
+        email = [data["email"]]
+        name = data["name"]
+        data = {}
+        data["name"] = name
+        data["routekey"] = routekey
+        data["enckey"] = encrypt(password, enckey.encode()).decode()
+        data["route"] = route
+        data["emails"] = [email]
+        data["messages"] = []
+        data["unreaden"] = False
+        self.data["chats"].append(data)
+        return True
