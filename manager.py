@@ -40,7 +40,9 @@ class manager:
         data["unreaden"] = False
         self.data["chats"].append(data.copy())
         self.save_config()
-        return (enckey, data["routekey"], data["route"], self.data["name"], choice(self.data["emails"]))
+        # FIX: Безопасно получаем первый email или пустую строку
+        first_email = self.data["emails"][0]["email"] if self.data.get("emails") else ""
+        return (enckey, data["routekey"], data["route"], self.data["name"], first_email)
 
     def create_key(self) -> str:
         str0 = "qwertyuiopaasdfghjklzxcvbnm1234567890"
@@ -145,9 +147,9 @@ class manager:
                 self.save_config()
             except Exception:
                 pass
-    
+
     def add_chat_from(self, password, data, from_file=False, file=None):
-        if (hash_password(password) == self.data["hash"] or not data["hash"] is None):
+        if hash_password(password) != self.data["hash"]:
             return False
         try:
             if from_file:
@@ -159,23 +161,26 @@ class manager:
         if not ("enckey" in data.keys() and 
                 "routekey" in data.keys() and
                 "route" in data.keys() and
-                "email" in data.keys() and
                 "name" in data.keys()):
             return False
         enckey = data["enckey"]
         routekey = data["routekey"]
         route = data["route"]
-        email = [data["email"]]
+        email = data.get("email", "")
         name = data["name"]
-        data = {}
-        data["name"] = name
-        data["routekey"] = routekey
-        data["enckey"] = encrypt(password, enckey.encode()).decode()
-        data["route"] = route
-        data["emails"] = [email]
-        data["messages"] = []
-        data["unreaden"] = False
-        self.data["chats"].append(data)
+        # Проверяем, не существует ли уже чат с таким именем
+        if name in [c["name"] for c in self.data["chats"]]:
+            return False
+        new_chat = {}
+        new_chat["name"] = name
+        new_chat["routekey"] = routekey
+        new_chat["enckey"] = encrypt(password, enckey.encode()).decode()
+        new_chat["route"] = route
+        new_chat["emails"] = [email] if email else []
+        new_chat["messages"] = []
+        new_chat["unreaden"] = False
+        self.data["chats"].append(new_chat)
+        self.save_config()
         return True
 
     def valid_passwd(self, password):
@@ -200,41 +205,4 @@ class manager:
             return enc_key
         except Exception as e:
             print(f"decrypt_chat_key error: {e}")
-            return None
-
-    def get_messages_from_chat(self, name_of_chat, password):
-            if (
-                self.data["hash"] == hash_password(password)
-                and not self.data["hash"] is None
-            ):
-                chat = [
-                    (x, i)
-                    for x, i in enumerate(self.data["chats"])
-                    if i["name"] == name_of_chat
-                ]
-
-                if len(chat) == 0:
-                    return None
-                else:
-                    chat = chat[0]
-                    index = chat[0]
-                    chat = chat[1]
-                    self.data["chats"][index]["unreaden"] = False
-                    messages = chat["messages"]
-
-                    try:
-                        enc_key = decrypt(password, chat["enckey"]).decode()
-                        messages = list(
-                            map(
-                                lambda x: (
-                                    decrypt_message(chat["routekey"], enc_key, x[0]),
-                                    x[1],
-                                ),
-                                messages,
-                            )
-                        )
-                        self.save_config()
-                        return (messages, name_of_chat)
-                    except Exception as e:
-                        print(e)
             return None
