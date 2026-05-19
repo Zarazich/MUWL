@@ -215,6 +215,7 @@
     let currentChatName = null;
     let currentEmails = [];
     let currentChats = [];
+    let currentProfileName = '';       // <-- добавили
     let refreshTimer = null;
     let isLoggedIn = false;
     let pendingDeleteChat = null;
@@ -449,6 +450,7 @@
             .then(res => res.json())
             .then(data => {
                 if (data.status === 'ok') {
+                    currentProfileName = data.profile_name || 'USER';  // сохраняем имя профиля
                     currentChats = data.chats || [];
                     currentEmails = data.emails || [];
 
@@ -832,8 +834,7 @@
         document.getElementById('messageText').placeholder = 'Введите сообщение...';
     }
 
-    // ИСПРАВЛЕННАЯ createChat: поле recipientEmail обязательно,
-    // в конфиг сохраняется СВОЙ email (currentEmails[0].email)
+    // createChat: сохраняет в JSON своё имя (currentProfileName) и свой email
     function createChat(e) {
         e.preventDefault();
         const name = document.getElementById('newChatName').value.trim();
@@ -867,18 +868,18 @@
             .then(res => res.json())
             .then(data => {
                 if (data.status === 'ok') {
-                    const { enckey, routekey, route, chat_name } = data;
-                    // Сохраняем СВОЙ email – на него собеседник будет отправлять ответы
+                    const { enckey, routekey, route } = data;
+                    // В конфиг кладём СВОЁ имя (отправителя) и СВОЙ email
                     const config = {
-                        name: chat_name,
+                        name: currentProfileName,               // имя создателя чата
                         enckey: enckey,
                         routekey: routekey,
                         route: route,
-                        email: currentEmails[0].email
+                        email: currentEmails[0].email          // email создателя
                     };
-                    const filename = `chat_${chat_name.replace(/[^a-z0-9]/gi, '_')}.json`;
+                    const filename = `chat_${name.replace(/[^a-z0-9]/gi, '_')}.json`;
                     downloadJSON(config, filename);
-                    showToast(`Чат "${chat_name}" создан! Конфигурация сохранена в ${filename}`, 'success');
+                    showToast(`Чат "${name}" создан! Конфигурация сохранена в ${filename}`, 'success');
                     closeModal('chatModal');
                     document.getElementById('newChatName').value = '';
                     document.getElementById('recipientEmail').value = '';
@@ -893,7 +894,7 @@
             });
     }
 
-    // Импорт конфигурации чата (с проверкой наличия своего email)
+    // Импорт конфигурации чата (проверка наличия своего email)
     function importChatConfig() {
         if (!currentEmails.length) {
             showToast('Сначала добавьте свой почтовый ящик, чтобы использовать импортированный чат', 'error');
