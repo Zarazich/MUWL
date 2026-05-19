@@ -146,7 +146,7 @@ class manager:
             except Exception:
                 pass
     
-    def add_chat_from(password, data, from_file=False, file=None):
+    def add_chat_from(self, password, data, from_file=False, file=None):
         if (hash_password(password) == self.data["hash"] or not data["hash"] is None):
             return False
         try:
@@ -162,7 +162,6 @@ class manager:
                 "email" in data.keys() and
                 "name" in data.keys()):
             return False
-        self.data["chats"]
         enckey = data["enckey"]
         routekey = data["routekey"]
         route = data["route"]
