@@ -177,3 +177,65 @@ class manager:
         data["unreaden"] = False
         self.data["chats"].append(data)
         return True
+
+    def valid_passwd(self, password):
+        hashed = hash_password(password)
+        stored = self.data["hash"]
+        return hashed == stored
+
+    def decrypt_chat_key(self, name_of_chat, password):
+        if self.data.get("hash") is None:
+            return None
+        if hash_password(password) != self.data["hash"]:
+            return None
+        chat = None
+        for c in self.data.get("chats", []):
+            if c.get("name") == name_of_chat:
+                chat = c
+                break
+        if not chat:
+            return None
+        try:
+            enc_key = decrypt(password, chat["enckey"]).decode()
+            return enc_key
+        except Exception as e:
+            print(f"decrypt_chat_key error: {e}")
+            return None
+
+    def get_messages_from_chat(self, name_of_chat, password):
+            if (
+                self.data["hash"] == hash_password(password)
+                and not self.data["hash"] is None
+            ):
+                chat = [
+                    (x, i)
+                    for x, i in enumerate(self.data["chats"])
+                    if i["name"] == name_of_chat
+                ]
+
+                if len(chat) == 0:
+                    return None
+                else:
+                    chat = chat[0]
+                    index = chat[0]
+                    chat = chat[1]
+                    self.data["chats"][index]["unreaden"] = False
+                    messages = chat["messages"]
+
+                    try:
+                        enc_key = decrypt(password, chat["enckey"]).decode()
+                        messages = list(
+                            map(
+                                lambda x: (
+                                    decrypt_message(chat["routekey"], enc_key, x[0]),
+                                    x[1],
+                                ),
+                                messages,
+                            )
+                        )
+                        self.save_config()
+                        return (messages, name_of_chat)
+                    except Exception as e:
+                        print(e)
+
+            return None
