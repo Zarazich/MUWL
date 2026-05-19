@@ -832,21 +832,28 @@
         document.getElementById('messageText').placeholder = 'Введите сообщение...';
     }
 
-    // ИСПРАВЛЕННАЯ ФУНКЦИЯ createChat (проверка email + автосохранение JSON)
+    // ИСПРАВЛЕННАЯ createChat: поле recipientEmail обязательно,
+    // в конфиг сохраняется СВОЙ email (currentEmails[0].email)
     function createChat(e) {
         e.preventDefault();
         const name = document.getElementById('newChatName').value.trim();
         const recipientEmail = document.getElementById('recipientEmail').value.trim();
         const pwd = getPassword();
 
-        if (!name) return;
+        if (!name) {
+            showToast('Введите имя чата', 'error');
+            return;
+        }
+        if (!recipientEmail) {
+            showToast('Укажите email получателя (собеседника)', 'error');
+            return;
+        }
         if (!pwd) {
             showToast('Введите пароль', 'error');
             return;
         }
-
         if (!currentEmails.length) {
-            showToast('Сначала добавьте почтовый ящик для отправки сообщений', 'error');
+            showToast('Сначала добавьте свой почтовый ящик для отправки сообщений', 'error');
             openModal('emailModal');
             return;
         }
@@ -854,19 +861,20 @@
         const formData = new FormData();
         formData.append('password', pwd);
         formData.append('name', name);
-        if (recipientEmail) formData.append('recipient_email', recipientEmail);
+        formData.append('recipient_email', recipientEmail);
 
         fetch('/createchat', { method: 'POST', body: formData })
             .then(res => res.json())
             .then(data => {
                 if (data.status === 'ok') {
                     const { enckey, routekey, route, chat_name } = data;
+                    // Сохраняем СВОЙ email – на него собеседник будет отправлять ответы
                     const config = {
                         name: chat_name,
                         enckey: enckey,
                         routekey: routekey,
                         route: route,
-                        email: recipientEmail || (currentEmails[0]?.email || '')
+                        email: currentEmails[0].email
                     };
                     const filename = `chat_${chat_name.replace(/[^a-z0-9]/gi, '_')}.json`;
                     downloadJSON(config, filename);
@@ -885,10 +893,10 @@
             });
     }
 
-    // ИСПРАВЛЕННАЯ ФУНКЦИЯ importChatConfig (проверка email)
+    // Импорт конфигурации чата (с проверкой наличия своего email)
     function importChatConfig() {
         if (!currentEmails.length) {
-            showToast('Сначала добавьте почтовый ящик, чтобы использовать импортированный чат', 'error');
+            showToast('Сначала добавьте свой почтовый ящик, чтобы использовать импортированный чат', 'error');
             openModal('emailModal');
             return;
         }
