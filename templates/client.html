@@ -217,7 +217,7 @@
     let currentChats = [];
     let refreshTimer = null;
     let isLoggedIn = false;
-    let pendingDeleteChat = null;  // добавлено
+    let pendingDeleteChat = null;
 
     function showToast(message, type = 'info') {
         const container = document.getElementById('toastContainer');
@@ -244,6 +244,18 @@
         const div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
+    }
+
+    function downloadJSON(data, filename) {
+        const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
     }
 
     function getAvatarHtml(avatarData, name, size = 'small') {
@@ -820,36 +832,45 @@
         document.getElementById('messageText').placeholder = 'Введите сообщение...';
     }
 
+    // ИСПРАВЛЕННАЯ ФУНКЦИЯ createChat (проверка email + автосохранение JSON)
     function createChat(e) {
         e.preventDefault();
         const name = document.getElementById('newChatName').value.trim();
         const recipientEmail = document.getElementById('recipientEmail').value.trim();
         const pwd = getPassword();
+
         if (!name) return;
-        if (!pwd) { showToast('Введите пароль', 'error'); return; }
+        if (!pwd) {
+            showToast('Введите пароль', 'error');
+            return;
+        }
+
+        if (!currentEmails.length) {
+            showToast('Сначала добавьте почтовый ящик для отправки сообщений', 'error');
+            openModal('emailModal');
+            return;
+        }
 
         const formData = new FormData();
         formData.append('password', pwd);
         formData.append('name', name);
         if (recipientEmail) formData.append('recipient_email', recipientEmail);
 
-        fetch('/createchat', {method: 'POST', body: formData})
+        fetch('/createchat', { method: 'POST', body: formData })
             .then(res => res.json())
             .then(data => {
                 if (data.status === 'ok') {
-                    const enckey = data.enckey;
-                    const routekey = data.routekey;
-                    const route = data.route;
-                    const chatName = data.chat_name;
-                    
-                    let message = `Чат "${chatName}" создан!\n\n`;
-                    message += `🔑 КЛЮЧ ШИФРОВАНИЯ (сохраните его):\n${enckey}\n\n`;
-                    message += `📡 Маршрутный ключ: ${routekey}\n`;
-                    message += `🛣️ Маршрут: ${route}\n\n`;
-                    message += `⚠️ Этот ключ нужен вашему собеседнику для импорта чата.`;
-                    
-                    alert(message);
-                    
+                    const { enckey, routekey, route, chat_name } = data;
+                    const config = {
+                        name: chat_name,
+                        enckey: enckey,
+                        routekey: routekey,
+                        route: route,
+                        email: recipientEmail || (currentEmails[0]?.email || '')
+                    };
+                    const filename = `chat_${chat_name.replace(/[^a-z0-9]/gi, '_')}.json`;
+                    downloadJSON(config, filename);
+                    showToast(`Чат "${chat_name}" создан! Конфигурация сохранена в ${filename}`, 'success');
                     closeModal('chatModal');
                     document.getElementById('newChatName').value = '';
                     document.getElementById('recipientEmail').value = '';
@@ -857,30 +878,41 @@
                 } else {
                     showToast('Ошибка: ' + (data.error || 'Неизвестная ошибка'), 'error');
                 }
+            })
+            .catch(err => {
+                console.error(err);
+                showToast('Ошибка сети при создании чата', 'error');
             });
     }
 
+    // ИСПРАВЛЕННАЯ ФУНКЦИЯ importChatConfig (проверка email)
     function importChatConfig() {
+        if (!currentEmails.length) {
+            showToast('Сначала добавьте почтовый ящик, чтобы использовать импортированный чат', 'error');
+            openModal('emailModal');
+            return;
+        }
+
         const fileInput = document.createElement('input');
         fileInput.type = 'file';
         fileInput.accept = 'application/json';
         fileInput.onchange = async (e) => {
             const file = e.target.files[0];
             if (!file) return;
-            
+
             const pwd = getPassword();
             if (!pwd) {
                 showToast('Необходимо войти', 'error');
                 return;
             }
-            
+
             const formData = new FormData();
             formData.append('password', pwd);
             formData.append('file', file);
-            
+
             showToast('Импорт конфигурации...', 'info');
-            
-            fetch('/import_chat_config', {method: 'POST', body: formData})
+
+            fetch('/import_chat_config', { method: 'POST', body: formData })
                 .then(res => res.json())
                 .then(data => {
                     if (data.status === 'ok') {
