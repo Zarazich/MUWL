@@ -23,8 +23,15 @@ for folder in [MEDIA_FOLDER, EXPORTS_FOLDER, AVATARS_FOLDER]:
 
 
 def get_password():
-    pwd = request.form.get("password") or request.json.get("password") or request.args.get("password")
-    return pwd
+    pwd = request.form.get("password")
+    if pwd is not None:
+        return pwd
+    pwd = request.args.get("password")
+    if pwd is not None:
+        return pwd
+    if request.is_json:
+        return request.json.get("password")
+    return None
 
 
 def check_auth():
@@ -310,8 +317,9 @@ def create_chat():
 
     if result is None:
         return jsonify({"error": "Chat creation failed - name may already exist"}), 502
-
-    if isinstance(result, tuple) and len(result) == 4:
+    if isinstance(result, tuple) and len(result) >= 4:
+        enckey, routekey, route, profile_name = result[:4]
+        # Добавляем email получателя, если указан
         if recipient_email:
             for chat in mgr.data.get("chats", []):
                 if chat.get("name") == name:
@@ -320,9 +328,51 @@ def create_chat():
                     break
             mgr.save_config()
 
-        return jsonify({"status": "ok", "chat_name": name, "chat_id": name}), 200
+        return jsonify({
+            "status": "ok",
+            "chat_name": name,
+            "chat_id": name,
+            "enckey": enckey,
+            "routekey": routekey,
+            "route": route
+        }), 200
 
     return jsonify({"error": "Chat creation failed"}), 502
+
+
+@app.route("/import_chat_config", methods=["POST"])
+def import_chat_config():
+    valid, password, error, code = check_auth()
+    if not valid:
+        return jsonify({"error": error}), code
+
+    if "file" not in request.files:
+        return jsonify({"error": "No file provided"}), 400
+
+    file = request.files["file"]
+    if file.filename == "":
+        return jsonify({"error": "No file selected"}), 400
+
+    try:
+        config = json.load(file)
+    except Exception as e:
+        return jsonify({"error": f"Invalid JSON: {str(e)}"}), 400
+
+    # Ожидаем поля: name, enckey, routekey, route (email опционально)
+    required = ["name", "enckey", "routekey", "route"]
+    if not all(k in config for k in required):
+        return jsonify({"error": "Missing required fields: name, enckey, routekey, route"}), 400
+
+    # Проверяем, нет ли чата с таким именем
+    for chat in mgr.data.get("chats", []):
+        if chat.get("name") == config["name"]:
+            return jsonify({"error": "Chat with this name already exists"}), 409
+
+    success = mgr.add_chat_from(password, config)
+    if success:
+        return jsonify({"status": "ok", "chat_name": config["name"]}), 200
+    else:
+        return jsonify({"error": "Failed to import chat configuration"}), 500
 
 
 @app.route("/sendmessage", methods=["POST"])
@@ -612,7 +662,6 @@ def delete_export():
 
     return jsonify({"error": "File not found"}), 404
 
-
 @app.route("/import_chat", methods=["POST"])
 def import_chat():
     valid, password, error, code = check_auth()
@@ -704,4 +753,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

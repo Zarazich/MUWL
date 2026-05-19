@@ -212,894 +212,950 @@
     <div class="toast-container" id="toastContainer"></div>
 
     <script>
-        let currentChatName = null;
-        let currentEmails = [];
-        let currentChats = [];
-        let refreshTimer = null;
-        let isLoggedIn = false;
+    let currentChatName = null;
+    let currentEmails = [];
+    let currentChats = [];
+    let refreshTimer = null;
+    let isLoggedIn = false;
+    let pendingDeleteChat = null;  // добавлено
 
-        function showToast(message, type = 'info') {
-            const container = document.getElementById('toastContainer');
-            if (!container) return;
-            const toast = document.createElement('div');
-            toast.className = `toast align-items-center text-white bg-${type === 'error' ? 'danger' : type === 'success' ? 'success' : 'primary'} border-0`;
-            toast.setAttribute('role', 'alert');
-            toast.innerHTML = `
-                <div class="d-flex"><div class="toast-body">${escapeHtml(message)}</div>
-                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button></div>
-            `;
-            container.appendChild(toast);
-            const bsToast = new bootstrap.Toast(toast, { autohide: true, delay: 3000 });
-            bsToast.show();
-            toast.addEventListener('hidden.bs.toast', () => toast.remove());
+    function showToast(message, type = 'info') {
+        const container = document.getElementById('toastContainer');
+        if (!container) return;
+        const toast = document.createElement('div');
+        toast.className = `toast align-items-center text-white bg-${type === 'error' ? 'danger' : type === 'success' ? 'success' : 'primary'} border-0`;
+        toast.setAttribute('role', 'alert');
+        toast.innerHTML = `
+            <div class="d-flex"><div class="toast-body">${escapeHtml(message)}</div>
+            <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button></div>
+        `;
+        container.appendChild(toast);
+        const bsToast = new bootstrap.Toast(toast, { autohide: true, delay: 3000 });
+        bsToast.show();
+        toast.addEventListener('hidden.bs.toast', () => toast.remove());
+    }
+
+    function getPassword() { return document.getElementById('masterPassword').value; }
+    function setPassword(pwd) { document.getElementById('masterPassword').value = pwd; }
+    function clearPassword() { document.getElementById('masterPassword').value = ''; }
+
+    function escapeHtml(text) {
+        if (!text) return '';
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    function getAvatarHtml(avatarData, name, size = 'small') {
+        if (avatarData && avatarData.startsWith('data:image')) {
+            return `<div class="user-avatar ${size}" style="background-image: url('${avatarData}'); background-size: cover;"></div>`;
+        } else {
+            const letter = name ? name[0].toUpperCase() : '?';
+            return `<div class="user-avatar avatar-placeholder ${size}"><span>${escapeHtml(letter)}</span></div>`;
+        }
+    }
+
+    function setAvatarImage(element, avatarData, name) {
+        if (avatarData && avatarData.startsWith('data:image')) {
+            element.style.backgroundImage = `url('${avatarData}')`;
+            element.style.backgroundSize = 'cover';
+            element.innerHTML = '';
+            element.classList.remove('avatar-placeholder');
+        } else {
+            element.style.backgroundImage = '';
+            const letter = name ? name[0].toUpperCase() : '?';
+            element.innerHTML = `<span>${escapeHtml(letter)}</span>`;
+            element.classList.add('avatar-placeholder');
+        }
+    }
+
+    function checkServerState() {
+        fetch('/check_setup')
+            .then(res => res.json())
+            .then(data => {
+                const authForm = document.getElementById('authForm');
+                const authTitle = document.getElementById('authTitle');
+                const authSubtitle = document.getElementById('authSubtitle');
+                const authIcon = document.getElementById('authIcon');
+
+                if (data.need_setup === true) {
+                    authIcon.textContent = '🔐';
+                    authTitle.textContent = 'Первичная настройка';
+                    authSubtitle.textContent = 'Установите мастер-пароль для шифрования данных';
+                    document.getElementById('authNameGroup').style.display = 'block';
+                    document.getElementById('confirmGroup').style.display = 'block';
+                    document.getElementById('passwordLabel').textContent = 'Мастер-пароль';
+                    document.getElementById('toggleSetupBtn').style.display = 'none';
+                    document.getElementById('authSubmitBtn').textContent = 'Завершить настройку';
+                    window.isSetupMode = true;
+                    authForm.style.display = 'block';
+                } else {
+                    authIcon.textContent = '🔑';
+                    authTitle.textContent = 'Вход в MUWL';
+                    authSubtitle.textContent = 'Введите мастер-пароль для доступа к чатам';
+                    document.getElementById('authNameGroup').style.display = 'none';
+                    document.getElementById('confirmGroup').style.display = 'none';
+                    document.getElementById('passwordLabel').textContent = 'Мастер-пароль';
+                    document.getElementById('toggleSetupBtn').style.display = 'block';
+                    document.getElementById('authSubmitBtn').textContent = 'Войти';
+                    window.isSetupMode = false;
+                    authForm.style.display = 'block';
+                }
+            })
+            .catch(err => {
+                console.error('Check setup error:', err);
+                document.getElementById('authTitle').textContent = 'Ошибка соединения';
+                document.getElementById('authSubtitle').textContent = 'Не удалось подключиться к серверу';
+            });
+    }
+
+    document.getElementById('authForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const password = document.getElementById('authPassword').value;
+        const messageDiv = document.getElementById('authMessage');
+
+        if (!password) {
+            messageDiv.className = 'alert-custom alert-danger-custom';
+            messageDiv.textContent = 'Введите пароль';
+            messageDiv.style.display = 'block';
+            return;
         }
 
-        function getPassword() { return document.getElementById('masterPassword').value; }
-        function setPassword(pwd) { document.getElementById('masterPassword').value = pwd; }
-        function clearPassword() { document.getElementById('masterPassword').value = ''; }
+        if (window.isSetupMode) {
+            const name = document.getElementById('setupName').value.trim();
+            const confirm = document.getElementById('confirmPassword').value;
 
-        function escapeHtml(text) {
-            if (!text) return '';
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        }
-
-        function getAvatarHtml(avatarData, name, size = 'small') {
-            if (avatarData && avatarData.startsWith('data:image')) {
-                return `<div class="user-avatar ${size}" style="background-image: url('${avatarData}'); background-size: cover;"></div>`;
-            } else {
-                const letter = name ? name[0].toUpperCase() : '?';
-                return `<div class="user-avatar avatar-placeholder ${size}"><span>${escapeHtml(letter)}</span></div>`;
-            }
-        }
-
-        function setAvatarImage(element, avatarData, name) {
-            if (avatarData && avatarData.startsWith('data:image')) {
-                element.style.backgroundImage = `url('${avatarData}')`;
-                element.style.backgroundSize = 'cover';
-                element.innerHTML = '';
-                element.classList.remove('avatar-placeholder');
-            } else {
-                element.style.backgroundImage = '';
-                const letter = name ? name[0].toUpperCase() : '?';
-                element.innerHTML = `<span>${escapeHtml(letter)}</span>`;
-                element.classList.add('avatar-placeholder');
-            }
-        }
-
-        function checkServerState() {
-            fetch('/check_setup')
-                .then(res => res.json())
-                .then(data => {
-                    const authForm = document.getElementById('authForm');
-                    const authTitle = document.getElementById('authTitle');
-                    const authSubtitle = document.getElementById('authSubtitle');
-                    const authIcon = document.getElementById('authIcon');
-
-                    if (data.need_setup === true) {
-                        authIcon.textContent = '🔐';
-                        authTitle.textContent = 'Первичная настройка';
-                        authSubtitle.textContent = 'Установите мастер-пароль для шифрования данных';
-                        document.getElementById('authNameGroup').style.display = 'block';
-                        document.getElementById('confirmGroup').style.display = 'block';
-                        document.getElementById('passwordLabel').textContent = 'Мастер-пароль';
-                        document.getElementById('toggleSetupBtn').style.display = 'none';
-                        document.getElementById('authSubmitBtn').textContent = 'Завершить настройку';
-                        window.isSetupMode = true;
-                        authForm.style.display = 'block';
-                    } else {
-                        authIcon.textContent = '🔑';
-                        authTitle.textContent = 'Вход в MUWL';
-                        authSubtitle.textContent = 'Введите мастер-пароль для доступа к чатам';
-                        document.getElementById('authNameGroup').style.display = 'none';
-                        document.getElementById('confirmGroup').style.display = 'none';
-                        document.getElementById('passwordLabel').textContent = 'Мастер-пароль';
-                        document.getElementById('toggleSetupBtn').style.display = 'block';
-                        document.getElementById('authSubmitBtn').textContent = 'Войти';
-                        window.isSetupMode = false;
-                        authForm.style.display = 'block';
-                    }
-                })
-                .catch(err => {
-                    console.error('Check setup error:', err);
-                    document.getElementById('authTitle').textContent = 'Ошибка соединения';
-                    document.getElementById('authSubtitle').textContent = 'Не удалось подключиться к серверу';
-                });
-        }
-
-        document.getElementById('authForm').addEventListener('submit', function(e) {
-            e.preventDefault();
-            const password = document.getElementById('authPassword').value;
-            const messageDiv = document.getElementById('authMessage');
-
-            if (!password) {
+            if (password !== confirm) {
                 messageDiv.className = 'alert-custom alert-danger-custom';
-                messageDiv.textContent = 'Введите пароль';
+                messageDiv.textContent = 'Пароли не совпадают';
+                messageDiv.style.display = 'block';
+                return;
+            }
+            if (!name) {
+                messageDiv.className = 'alert-custom alert-danger-custom';
+                messageDiv.textContent = 'Введите ваше имя';
+                messageDiv.style.display = 'block';
+                return;
+            }
+            if (password.length < 4) {
+                messageDiv.className = 'alert-custom alert-danger-custom';
+                messageDiv.textContent = 'Пароль должен быть не менее 4 символов';
                 messageDiv.style.display = 'block';
                 return;
             }
 
-            if (window.isSetupMode) {
-                const name = document.getElementById('setupName').value.trim();
-                const confirm = document.getElementById('confirmPassword').value;
+            const formData = new FormData();
+            formData.append('password', password);
+            formData.append('name', name);
 
-                if (password !== confirm) {
-                    messageDiv.className = 'alert-custom alert-danger-custom';
-                    messageDiv.textContent = 'Пароли не совпадают';
-                    messageDiv.style.display = 'block';
-                    return;
-                }
-                if (!name) {
-                    messageDiv.className = 'alert-custom alert-danger-custom';
-                    messageDiv.textContent = 'Введите ваше имя';
-                    messageDiv.style.display = 'block';
-                    return;
-                }
-                if (password.length < 4) {
-                    messageDiv.className = 'alert-custom alert-danger-custom';
-                    messageDiv.textContent = 'Пароль должен быть не менее 4 символов';
-                    messageDiv.style.display = 'block';
-                    return;
-                }
-
-                const formData = new FormData();
-                formData.append('password', password);
-                formData.append('name', name);
-
-                fetch('/register', {method: 'POST', body: formData})
-                    .then(res => res.json())
-                    .then(data => {
-                        if (data.status === 'ok') {
-                            setPassword(password);
-                            startMainApp();
-                        } else {
-                            messageDiv.className = 'alert-custom alert-danger-custom';
-                            messageDiv.textContent = 'Ошибка: ' + (data.error || 'Неизвестная ошибка');
-                            messageDiv.style.display = 'block';
-                        }
-                    });
-            } else {
-                const formData = new FormData();
-                formData.append('password', password);
-
-                fetch('/login', {method: 'POST', body: formData})
-                    .then(res => res.json())
-                    .then(data => {
-                        if (data.status === 'ok') {
-                            setPassword(password);
-                            startMainApp();
-                        } else if (data.need_setup === true) {
-                            window.isSetupMode = true;
-                            document.getElementById('authTitle').textContent = 'Первичная настройка';
-                            document.getElementById('authSubtitle').textContent = 'Установите мастер-пароль для шифрования данных';
-                            document.getElementById('authNameGroup').style.display = 'block';
-                            document.getElementById('confirmGroup').style.display = 'block';
-                            document.getElementById('toggleSetupBtn').style.display = 'none';
-                            document.getElementById('authSubmitBtn').textContent = 'Завершить настройку';
-                            document.getElementById('authPassword').value = '';
-                            messageDiv.className = 'alert-custom alert-info-custom';
-                            messageDiv.textContent = 'Сервер не настроен. Установите мастер-пароль.';
-                            messageDiv.style.display = 'block';
-                        } else {
-                            messageDiv.className = 'alert-custom alert-danger-custom';
-                            messageDiv.textContent = 'Неверный пароль';
-                            messageDiv.style.display = 'block';
-                            document.getElementById('authPassword').value = '';
-                        }
-                    });
-            }
-        });
-
-        document.getElementById('toggleSetupBtn').addEventListener('click', function() {
-            window.isSetupMode = true;
-            document.getElementById('authTitle').textContent = 'Первичная настройка';
-            document.getElementById('authSubtitle').textContent = 'Установите мастер-пароль для шифрования данных';
-            document.getElementById('authNameGroup').style.display = 'block';
-            document.getElementById('confirmGroup').style.display = 'block';
-            document.getElementById('toggleSetupBtn').style.display = 'none';
-            document.getElementById('authSubmitBtn').textContent = 'Завершить настройку';
-            document.getElementById('authPassword').value = '';
-            document.getElementById('setupName').value = '';
-            document.getElementById('confirmPassword').value = '';
-            document.getElementById('authMessage').style.display = 'none';
-        });
-
-        function startMainApp() {
-            isLoggedIn = true;
-            document.getElementById('authSection').style.display = 'none';
-            document.getElementById('mainSection').style.display = 'block';
-            updateHeaderButtons(true);
-            loadChats();
-
-            if (refreshTimer) clearInterval(refreshTimer);
-            refreshTimer = setInterval(() => {
-                if (isLoggedIn && getPassword()) {
-                    loadChats(false);
-                    if (currentChatName) {
-                        loadChatMessages(currentChatName, false);
-                    }
-                }
-            }, 1000);
-        }
-
-        function loadChats(showLoading = true) {
-            const pwd = getPassword();
-            if (!pwd) return;
-
-            const container = document.getElementById('chatsList');
-            if (showLoading && container) {
-                container.innerHTML = '<div class="text-center p-3"><div class="loading-spinner"></div> Загрузка...</div>';
-            }
-
-            fetch(`/update?password=${encodeURIComponent(pwd)}`)
+            fetch('/register', {method: 'POST', body: formData})
                 .then(res => res.json())
                 .then(data => {
                     if (data.status === 'ok') {
-                        currentChats = data.chats || [];
-                        currentEmails = data.emails || [];
-
-                        const subtitle = document.getElementById('sidebarSubtitle');
-                        if (subtitle) {
-                            subtitle.textContent = `📬 Чатов: ${currentChats.length} | Непрочитанных: ${data.total_unread || 0}`;
-                        }
-
-                        if (container) {
-                            if (!currentChats.length) {
-                                container.innerHTML = `<div class="p-4 text-center"><div class="fs-1">📭</div><p>Нет чатов</p><button class="btn btn-sm btn-primary" onclick="openModal('chatModal')">Создать чат</button></div>`;
-                            } else {
-                                let html = '';
-                                for (let chat of currentChats) {
-                                    html += `
-                                        <div class="user-item-link ${currentChatName === chat.name ? 'active' : ''}" onclick="loadChatMessages('${escapeHtml(chat.name)}', true)">
-                                            <div class="user-item-sidebar">
-                                                ${getAvatarHtml(chat.avatar, chat.name, 'small')}
-                                                <div class="user-info-sidebar">
-                                                    <div class="user-name">${escapeHtml(chat.name)}</div>
-                                                    <div class="user-status small">${escapeHtml(chat.last_message || 'Нет сообщений')}</div>
-                                                </div>
-                                                ${chat.unread_count > 0 ? `<span class="badge-unread">${chat.unread_count}</span>` : ''}
-                                            </div>
-                                        </div>
-                                    `;
-                                }
-                                container.innerHTML = html;
-                            }
-                        }
-
-                        const emailListDiv = document.getElementById('emailList');
-                        if (emailListDiv) {
-                            if (currentEmails.length) {
-                                let html = '<strong>Подключённые ящики:</strong><ul class="small mt-2">';
-                                currentEmails.forEach(e => html += `<li>📧 ${escapeHtml(e.email)}</li>`);
-                                html += '</ul>';
-                                emailListDiv.innerHTML = html;
-                            } else {
-                                emailListDiv.innerHTML = '<p class="text-warning">⚠️ Нет добавленных email. Добавьте почтовый ящик для отправки.</p>';
-                            }
-                        }
-                    } else if (data.error === 'Invalid password' || data.error === 'Password required') {
-                        logout();
-                    } else if (data.need_setup === true) {
-                        logout();
+                        setPassword(password);
+                        startMainApp();
+                    } else {
+                        messageDiv.className = 'alert-custom alert-danger-custom';
+                        messageDiv.textContent = 'Ошибка: ' + (data.error || 'Неизвестная ошибка');
+                        messageDiv.style.display = 'block';
                     }
-                })
-                .catch(err => console.error('loadChats error:', err));
+                });
+        } else {
+            const formData = new FormData();
+            formData.append('password', password);
+
+            fetch('/login', {method: 'POST', body: formData})
+                .then(res => res.json())
+                .then(data => {
+                    if (data.status === 'ok') {
+                        setPassword(password);
+                        startMainApp();
+                    } else if (data.need_setup === true) {
+                        window.isSetupMode = true;
+                        document.getElementById('authTitle').textContent = 'Первичная настройка';
+                        document.getElementById('authSubtitle').textContent = 'Установите мастер-пароль для шифрования данных';
+                        document.getElementById('authNameGroup').style.display = 'block';
+                        document.getElementById('confirmGroup').style.display = 'block';
+                        document.getElementById('toggleSetupBtn').style.display = 'none';
+                        document.getElementById('authSubmitBtn').textContent = 'Завершить настройку';
+                        document.getElementById('authPassword').value = '';
+                        messageDiv.className = 'alert-custom alert-info-custom';
+                        messageDiv.textContent = 'Сервер не настроен. Установите мастер-пароль.';
+                        messageDiv.style.display = 'block';
+                    } else {
+                        messageDiv.className = 'alert-custom alert-danger-custom';
+                        messageDiv.textContent = 'Неверный пароль';
+                        messageDiv.style.display = 'block';
+                        document.getElementById('authPassword').value = '';
+                    }
+                });
+        }
+    });
+
+    document.getElementById('toggleSetupBtn').addEventListener('click', function() {
+        window.isSetupMode = true;
+        document.getElementById('authTitle').textContent = 'Первичная настройка';
+        document.getElementById('authSubtitle').textContent = 'Установите мастер-пароль для шифрования данных';
+        document.getElementById('authNameGroup').style.display = 'block';
+        document.getElementById('confirmGroup').style.display = 'block';
+        document.getElementById('toggleSetupBtn').style.display = 'none';
+        document.getElementById('authSubmitBtn').textContent = 'Завершить настройку';
+        document.getElementById('authPassword').value = '';
+        document.getElementById('setupName').value = '';
+        document.getElementById('confirmPassword').value = '';
+        document.getElementById('authMessage').style.display = 'none';
+    });
+
+    function startMainApp() {
+        isLoggedIn = true;
+        document.getElementById('authSection').style.display = 'none';
+        document.getElementById('mainSection').style.display = 'block';
+        updateHeaderButtons(true);
+        loadChats();
+
+        if (refreshTimer) clearInterval(refreshTimer);
+        refreshTimer = setInterval(() => {
+            if (isLoggedIn && getPassword()) {
+                loadChats(false);
+                if (currentChatName) {
+                    loadChatMessages(currentChatName, false);
+                }
+            }
+        }, 1000);
+    }
+
+    function loadChats(showLoading = true) {
+        const pwd = getPassword();
+        if (!pwd) return;
+
+        const container = document.getElementById('chatsList');
+        if (showLoading && container) {
+            container.innerHTML = '<div class="text-center p-3"><div class="loading-spinner"></div> Загрузка...</div>';
         }
 
-        function loadChatMessages(chatName, switchToChat = true) {
-            const pwd = getPassword();
-            if (!pwd) return;
+        fetch(`/update?password=${encodeURIComponent(pwd)}`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'ok') {
+                    currentChats = data.chats || [];
+                    currentEmails = data.emails || [];
 
-            if (switchToChat) {
-                currentChatName = chatName;
-                document.getElementById('chatName').textContent = chatName;
-                document.getElementById('currentChatId').value = chatName;
-
-                const chat = currentChats.find(c => c.name === chatName);
-                if (chat) {
-                    const avatarElement = document.getElementById('chatAvatar');
-                    setAvatarImage(avatarElement, chat.avatar, chatName);
-                }
-
-                document.querySelectorAll('.user-item-link').forEach(el => {
-                    if (el.textContent.includes(chatName)) el.classList.add('active');
-                    else el.classList.remove('active');
-                });
-            }
-
-            fetch(`/getchatmessages?password=${encodeURIComponent(pwd)}&chatname=${encodeURIComponent(chatName)}`)
-                .then(res => {
-                    if (res.status === 401) {
-                        logout();
-                        return;
+                    const subtitle = document.getElementById('sidebarSubtitle');
+                    if (subtitle) {
+                        subtitle.textContent = `📬 Чатов: ${currentChats.length} | Непрочитанных: ${data.total_unread || 0}`;
                     }
-                    if (res.status === 502) {
-                        showToast('Чат не найден', 'error');
-                        return;
-                    }
-                    return res.json();
-                })
-                .then(data => {
-                    if (data && data.status === 'ok') {
-                        const messagesArea = document.getElementById('messagesArea');
-                        if (!data.messages || !data.messages.length) {
-                            messagesArea.innerHTML = `<div class="empty-chat"><div class="empty-chat-icon">💭</div><h5>Нет сообщений</h5><p>Напишите первое сообщение</p></div>`;
-                            return;
-                        }
-                        let html = '';
-                        for (let msg of data.messages) {
-                            const type = msg.is_outgoing ? 'outgoing' : 'incoming';
-                            if (msg.type === 'media') {
-                                let mediaData = msg.content;
-                                if (mediaData.startsWith('[MEDIA:')) {
-                                    const parts = mediaData.split(']', 1);
-                                    if (parts.length === 2) {
-                                        mediaData = parts[1];
-                                    }
-                                }
-                                if (mediaData.includes('[FILE_DATA]')) {
-                                    mediaData = mediaData.split('[FILE_DATA]')[1];
-                                }
-                                const isImage = /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(msg.filename);
+
+                    if (container) {
+                        if (!currentChats.length) {
+                            container.innerHTML = `<div class="p-4 text-center"><div class="fs-1">📭</div><p>Нет чатов</p><button class="btn btn-sm btn-primary" onclick="openModal('chatModal')">Создать чат</button></div>`;
+                        } else {
+                            let html = '';
+                            for (let chat of currentChats) {
                                 html += `
-                                    <div class="message message-${type}">
-                                        <div class="message-bubble" style="padding: 10px;">
-                                            <div><i class="bi bi-paperclip"></i> ${escapeHtml(msg.filename)}</div>
-                                            ${isImage ? `<img src="data:image/${msg.filename.split('.').pop()};base64,${mediaData}" style="max-width: 200px; border-radius: 8px; cursor: pointer; margin-top: 8px;" onclick="previewImage(this.src)">` : `<div class="text-center p-3"><i class="bi bi-file-earmark fs-1"></i></div>`}
-                                            <div class="mt-2"><button class="btn btn-sm btn-outline-primary" onclick="downloadMedia('${escapeHtml(msg.filename)}', '${mediaData}')"><i class="bi bi-download"></i> Скачать</button></div>
+                                    <div class="user-item-link ${currentChatName === chat.name ? 'active' : ''}" onclick="loadChatMessages('${escapeHtml(chat.name)}', true)">
+                                        <div class="user-item-sidebar">
+                                            ${getAvatarHtml(chat.avatar, chat.name, 'small')}
+                                            <div class="user-info-sidebar">
+                                                <div class="user-name">${escapeHtml(chat.name)}</div>
+                                                <div class="user-status small">${escapeHtml(chat.last_message || 'Нет сообщений')}</div>
+                                            </div>
+                                            ${chat.unread_count > 0 ? `<span class="badge-unread">${chat.unread_count}</span>` : ''}
                                         </div>
-                                        <div class="message-time">${msg.is_outgoing ? 'Вы' : 'Собеседник'}</div>
                                     </div>
                                 `;
-                            } else {
-                                html += `<div class="message message-${type}"><div class="message-bubble">${escapeHtml(msg.content)}</div><div class="message-time">${msg.is_outgoing ? 'Вы' : 'Собеседник'}</div></div>`;
                             }
+                            container.innerHTML = html;
                         }
-                        messagesArea.innerHTML = html;
-                        messagesArea.scrollTop = messagesArea.scrollHeight;
-                        loadChats(false);
-                    } else if (data && data.error) {
-                        showToast('Ошибка загрузки: ' + data.error, 'error');
                     }
-                });
-        }
 
-        function refreshCurrentChat() {
-            if (currentChatName) loadChatMessages(currentChatName, false);
-        }
-
-        function renameCurrentChat() {
-            if (!currentChatName) {
-                showToast('Сначала выберите чат', 'error');
-                return;
-            }
-            document.getElementById('newChatNameInput').value = currentChatName;
-            openModal('renameModal');
-        }
-
-        function renameChat(e) {
-            e.preventDefault();
-            const newName = document.getElementById('newChatNameInput').value.trim();
-            if (!newName) {
-                showToast('Введите новое имя', 'error');
-                return;
-            }
-            if (newName === currentChatName) {
-                closeModal('renameModal');
-                return;
-            }
-
-            const pwd = getPassword();
-            const formData = new FormData();
-            formData.append('password', pwd);
-            formData.append('old_name', currentChatName);
-            formData.append('new_name', newName);
-
-            fetch('/rename_chat', {method: 'POST', body: formData})
-                .then(res => res.json())
-                .then(data => {
-                    if (data.status === 'ok') {
-                        showToast('Чат переименован в "' + newName + '"', 'success');
-                        currentChatName = newName;
-                        closeModal('renameModal');
-                        loadChats();
-                        loadChatMessages(newName, true);
-                    } else {
-                        showToast('Ошибка: ' + data.error, 'error');
-                    }
-                });
-        }
-
-        function changeChatAvatar() {
-            if (!currentChatName) {
-                showToast('Сначала выберите чат', 'error');
-                return;
-            }
-            window.currentAvatarTarget = currentChatName;
-            const chat = currentChats.find(c => c.name === currentChatName);
-            document.getElementById('avatarPreview').innerHTML = getAvatarHtml(chat?.avatar, currentChatName, 'large');
-            openModal('avatarModal');
-        }
-
-        function uploadAvatar() {
-            const file = document.getElementById('avatarFile').files[0];
-            if (!file) {
-                showToast('Выберите изображение', 'error');
-                return;
-            }
-
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                const avatarData = e.target.result;
-                const pwd = getPassword();
-                const formData = new FormData();
-                formData.append('password', pwd);
-                formData.append('target', window.currentAvatarTarget);
-                formData.append('avatar', avatarData);
-
-                fetch('/upload_avatar', {method: 'POST', body: formData})
-                    .then(res => res.json())
-                    .then(data => {
-                        if (data.status === 'ok') {
-                            showToast('Аватар обновлён', 'success');
-                            closeModal('avatarModal');
-                            loadChats();
-                            if (currentChatName === window.currentAvatarTarget) {
-                                loadChatMessages(currentChatName, false);
-                            }
-                            document.getElementById('avatarFile').value = '';
+                    const emailListDiv = document.getElementById('emailList');
+                    if (emailListDiv) {
+                        if (currentEmails.length) {
+                            let html = '<strong>Подключённые ящики:</strong><ul class="small mt-2">';
+                            currentEmails.forEach(e => html += `<li>📧 ${escapeHtml(e.email)}</li>`);
+                            html += '</ul>';
+                            emailListDiv.innerHTML = html;
                         } else {
-                            showToast('Ошибка: ' + data.error, 'error');
+                            emailListDiv.innerHTML = '<p class="text-warning">⚠️ Нет добавленных email. Добавьте почтовый ящик для отправки.</p>';
                         }
-                    });
-            };
-            reader.readAsDataURL(file);
+                    }
+                } else if (data.error === 'Invalid password' || data.error === 'Password required') {
+                    logout();
+                } else if (data.need_setup === true) {
+                    logout();
+                }
+            })
+            .catch(err => {
+                console.error('loadChats error:', err);
+                if (container) container.innerHTML = '<div class="text-center p-3 text-danger">Ошибка соединения</div>';
+            });
+    }
+
+    function loadChatMessages(chatName, switchToChat = true) {
+        const pwd = getPassword();
+        if (!pwd) return;
+
+        if (switchToChat) {
+            currentChatName = chatName;
+            document.getElementById('chatName').textContent = chatName;
+            document.getElementById('currentChatId').value = chatName;
+
+            const chat = currentChats.find(c => c.name === chatName);
+            if (chat) {
+                const avatarElement = document.getElementById('chatAvatar');
+                setAvatarImage(avatarElement, chat.avatar, chatName);
+            }
+
+            document.querySelectorAll('.user-item-link').forEach(el => {
+                if (el.textContent.includes(chatName)) el.classList.add('active');
+                else el.classList.remove('active');
+            });
         }
 
-        function removeAvatar() {
+        fetch(`/getchatmessages?password=${encodeURIComponent(pwd)}&chatname=${encodeURIComponent(chatName)}`)
+            .then(res => {
+                if (res.status === 401) {
+                    logout();
+                    return;
+                }
+                if (res.status === 502) {
+                    showToast('Чат не найден', 'error');
+                    return;
+                }
+                return res.json();
+            })
+            .then(data => {
+                if (data && data.status === 'ok') {
+                    const messagesArea = document.getElementById('messagesArea');
+                    if (!data.messages || !data.messages.length) {
+                        messagesArea.innerHTML = `<div class="empty-chat"><div class="empty-chat-icon">💭</div><h5>Нет сообщений</h5><p>Напишите первое сообщение</p></div>`;
+                        return;
+                    }
+                    let html = '';
+                    for (let msg of data.messages) {
+                        const type = msg.is_outgoing ? 'outgoing' : 'incoming';
+                        if (msg.type === 'media') {
+                            let mediaData = msg.content;
+                            if (mediaData.startsWith('[MEDIA:')) {
+                                const parts = mediaData.split(']', 1);
+                                if (parts.length === 2) {
+                                    mediaData = parts[1];
+                                }
+                            }
+                            if (mediaData.includes('[FILE_DATA]')) {
+                                mediaData = mediaData.split('[FILE_DATA]')[1];
+                            }
+                            const isImage = /\.(jpg|jpeg|png|gif|webp|svg)$/i.test(msg.filename);
+                            html += `
+                                <div class="message message-${type}">
+                                    <div class="message-bubble" style="padding: 10px;">
+                                        <div><i class="bi bi-paperclip"></i> ${escapeHtml(msg.filename)}</div>
+                                        ${isImage ? `<img src="data:image/${msg.filename.split('.').pop()};base64,${mediaData}" style="max-width: 200px; border-radius: 8px; cursor: pointer; margin-top: 8px;" onclick="previewImage(this.src)">` : `<div class="text-center p-3"><i class="bi bi-file-earmark fs-1"></i></div>`}
+                                        <div class="mt-2"><button class="btn btn-sm btn-outline-primary" onclick="downloadMedia('${escapeHtml(msg.filename)}', '${mediaData}')"><i class="bi bi-download"></i> Скачать</button></div>
+                                    </div>
+                                    <div class="message-time">${msg.is_outgoing ? 'Вы' : 'Собеседник'}</div>
+                                </div>
+                            `;
+                        } else {
+                            html += `<div class="message message-${type}"><div class="message-bubble">${escapeHtml(msg.content)}</div><div class="message-time">${msg.is_outgoing ? 'Вы' : 'Собеседник'}</div></div>`;
+                        }
+                    }
+                    messagesArea.innerHTML = html;
+                    messagesArea.scrollTop = messagesArea.scrollHeight;
+                    loadChats(false);
+                } else if (data && data.error) {
+                    showToast('Ошибка загрузки: ' + data.error, 'error');
+                }
+            });
+    }
+
+    function refreshCurrentChat() {
+        if (currentChatName) loadChatMessages(currentChatName, false);
+    }
+
+    function renameCurrentChat() {
+        if (!currentChatName) {
+            showToast('Сначала выберите чат', 'error');
+            return;
+        }
+        document.getElementById('newChatNameInput').value = currentChatName;
+        openModal('renameModal');
+    }
+
+    function renameChat(e) {
+        e.preventDefault();
+        const newName = document.getElementById('newChatNameInput').value.trim();
+        if (!newName) {
+            showToast('Введите новое имя', 'error');
+            return;
+        }
+        if (newName === currentChatName) {
+            closeModal('renameModal');
+            return;
+        }
+
+        const pwd = getPassword();
+        const formData = new FormData();
+        formData.append('password', pwd);
+        formData.append('old_name', currentChatName);
+        formData.append('new_name', newName);
+
+        fetch('/rename_chat', {method: 'POST', body: formData})
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'ok') {
+                    showToast('Чат переименован в "' + newName + '"', 'success');
+                    currentChatName = newName;
+                    closeModal('renameModal');
+                    loadChats();
+                    loadChatMessages(newName, true);
+                } else {
+                    showToast('Ошибка: ' + data.error, 'error');
+                }
+            });
+    }
+
+    function changeChatAvatar() {
+        if (!currentChatName) {
+            showToast('Сначала выберите чат', 'error');
+            return;
+        }
+        window.currentAvatarTarget = currentChatName;
+        const chat = currentChats.find(c => c.name === currentChatName);
+        document.getElementById('avatarPreview').innerHTML = getAvatarHtml(chat?.avatar, currentChatName, 'large');
+        openModal('avatarModal');
+    }
+
+    function uploadAvatar() {
+        const file = document.getElementById('avatarFile').files[0];
+        if (!file) {
+            showToast('Выберите изображение', 'error');
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const avatarData = e.target.result;
             const pwd = getPassword();
             const formData = new FormData();
             formData.append('password', pwd);
             formData.append('target', window.currentAvatarTarget);
-            formData.append('avatar', '');
+            formData.append('avatar', avatarData);
 
             fetch('/upload_avatar', {method: 'POST', body: formData})
                 .then(res => res.json())
                 .then(data => {
                     if (data.status === 'ok') {
-                        showToast('Аватар удалён', 'success');
+                        showToast('Аватар обновлён', 'success');
                         closeModal('avatarModal');
                         loadChats();
                         if (currentChatName === window.currentAvatarTarget) {
                             loadChatMessages(currentChatName, false);
                         }
+                        document.getElementById('avatarFile').value = '';
                     } else {
                         showToast('Ошибка: ' + data.error, 'error');
                     }
                 });
-        }
+        };
+        reader.readAsDataURL(file);
+    }
 
-        function deleteCurrentChat() {
-            if (!currentChatName) {
-                showToast('Сначала выберите чат', 'error');
-                return;
-            }
-            pendingDeleteChat = currentChatName;
-            document.getElementById('deleteChatName').textContent = currentChatName;
-            openModal('deleteChatModal');
-        }
+    function removeAvatar() {
+        const pwd = getPassword();
+        const formData = new FormData();
+        formData.append('password', pwd);
+        formData.append('target', window.currentAvatarTarget);
+        formData.append('avatar', '');
 
-        function confirmDeleteChat() {
-            if (!pendingDeleteChat) return;
-
-            const pwd = getPassword();
-            const formData = new FormData();
-            formData.append('password', pwd);
-            formData.append('chat_name', pendingDeleteChat);
-
-            fetch('/delete_chat', {method: 'POST', body: formData})
-                .then(res => res.json())
-                .then(data => {
-                    if (data.status === 'ok') {
-                        showToast('Чат удалён', 'success');
-                        currentChatName = null;
-                        document.getElementById('chatName').textContent = 'Выберите чат';
-                        document.getElementById('messagesArea').innerHTML = '<div class="empty-chat"><div class="empty-chat-icon">💬</div><h5>Выберите чат</h5><p>Чтобы начать общение</p></div>';
-                        closeModal('deleteChatModal');
-                        loadChats();
-                    } else {
-                        showToast('Ошибка: ' + data.error, 'error');
-                    }
-                });
-        }
-
-        function sendMessage(e) {
-            e.preventDefault();
-            const chatName = document.getElementById('currentChatId').value;
-            const messageText = document.getElementById('messageText').value.trim();
-            const fileData = document.getElementById('selectedFileData').value;
-            const fileName = document.getElementById('selectedFileName').value;
-            const pwd = getPassword();
-
-            if (!chatName || (!messageText && !fileData)) return;
-            if (!pwd) { showToast('Введите пароль', 'error'); return; }
-
-            let recipientEmail = '';
-            const chat = currentChats.find(c => c.name === chatName);
-            if (chat && chat.emails && chat.emails.length) {
-                recipientEmail = chat.emails[0];
-            }
-
-            const senderEmail = currentEmails.length ? currentEmails[0].email : '';
-
-            if (!senderEmail) {
-                showToast('Добавьте почтовый ящик для отправки', 'error');
-                openModal('emailModal');
-                return;
-            }
-
-            if (!recipientEmail) {
-                showToast('Укажите email получателя', 'error');
-                return;
-            }
-
-            if (fileData && fileName) {
-                const formData = new FormData();
-                formData.append('password', pwd);
-                formData.append('chatid', chatName);
-                formData.append('recipient_email', recipientEmail);
-                formData.append('sender_email', senderEmail);
-                if (messageText) formData.append('message', messageText);
-
-                const byteString = atob(fileData);
-                const ab = new ArrayBuffer(byteString.length);
-                const ia = new Uint8Array(ab);
-                for (let i = 0; i < byteString.length; i++) ia[i] = byteString.charCodeAt(i);
-                formData.append('file', new Blob([ab]), fileName);
-
-                fetch('/send_media', {method: 'POST', body: formData})
-                    .then(res => res.json())
-                    .then(data => {
-                        if (data.status === 'ok') {
-                            clearFile();
-                            document.getElementById('messageText').value = '';
-                            loadChatMessages(chatName, false);
-                            showToast('Файл отправлен', 'success');
-                        } else { showToast('Ошибка: ' + (data.error || 'Неизвестная ошибка'), 'error'); }
-                    });
-            } else if (messageText) {
-                const formData = new FormData();
-                formData.append('password', pwd);
-                formData.append('chatid', chatName);
-                formData.append('message', messageText);
-                formData.append('recipient_email', recipientEmail);
-                formData.append('sender_email', senderEmail);
-
-                fetch('/sendmessage', {method: 'POST', body: formData})
-                    .then(res => res.json())
-                    .then(data => {
-                        if (data.status === 'ok') {
-                            document.getElementById('messageText').value = '';
-                            loadChatMessages(chatName, false);
-                        } else { showToast('Ошибка: ' + (data.error || 'Неизвестная ошибка'), 'error'); }
-                    });
-            }
-        }
-
-        function handleFileSelect(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-            if (file.size > 5 * 1024 * 1024) {
-                showToast('Файл слишком большой (макс 5 МБ)', 'error');
-                return;
-            }
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                const base64 = e.target.result.split(',')[1];
-                document.getElementById('selectedFileData').value = base64;
-                document.getElementById('selectedFileName').value = file.name;
-                document.getElementById('filePreview').style.display = 'block';
-                document.getElementById('fileName').textContent = `${file.name} (${(file.size/1024).toFixed(1)} КБ)`;
-                document.getElementById('messageText').required = false;
-                document.getElementById('messageText').placeholder = 'Подпись к файлу (необязательно)';
-            };
-            reader.readAsDataURL(file);
-        }
-
-        function clearFile() {
-            document.getElementById('selectedFileData').value = '';
-            document.getElementById('selectedFileName').value = '';
-            document.getElementById('fileInput').value = '';
-            document.getElementById('filePreview').style.display = 'none';
-            document.getElementById('messageText').required = true;
-            document.getElementById('messageText').placeholder = 'Введите сообщение...';
-        }
-
-        function createChat(e) {
-            e.preventDefault();
-            const name = document.getElementById('newChatName').value.trim();
-            const recipientEmail = document.getElementById('recipientEmail').value.trim();
-            const pwd = getPassword();
-            if (!name) return;
-            if (!pwd) { showToast('Введите пароль', 'error'); return; }
-
-            const formData = new FormData();
-            formData.append('password', pwd);
-            formData.append('name', name);
-            if (recipientEmail) formData.append('recipient_email', recipientEmail);
-
-            fetch('/createchat', {method: 'POST', body: formData})
-                .then(res => res.json())
-                .then(data => {
-                    if (data.status === 'ok') {
-                        showToast('Чат создан: ' + data.chat_name, 'success');
-                        closeModal('chatModal');
-                        document.getElementById('newChatName').value = '';
-                        document.getElementById('recipientEmail').value = '';
-                        loadChats();
-                    } else {
-                        showToast('Ошибка: ' + (data.error || 'Неизвестная ошибка'), 'error');
-                    }
-                });
-        }
-
-        function submitEmail(e) {
-            e.preventDefault();
-            const email = document.getElementById('newEmail').value.trim();
-            const apikey = document.getElementById('emailApikey').value.trim();
-            const pwd = getPassword();
-            if (!email || !apikey) return;
-            if (!pwd) { showToast('Введите пароль', 'error'); return; }
-
-            const formData = new FormData();
-            formData.append('password', pwd);
-            formData.append('email', email);
-            formData.append('apikey', apikey);
-
-            fetch('/add_email', {method: 'POST', body: formData})
-                .then(res => res.json())
-                .then(data => {
-                    if (data.status === 'ok') {
-                        showToast('Почта добавлена', 'success');
-                        document.getElementById('newEmail').value = '';
-                        document.getElementById('emailApikey').value = '';
-                        closeModal('emailModal');
-                        loadChats();
-                    } else {
-                        showToast('Ошибка: ' + (data.error || 'Неизвестная ошибка'), 'error');
-                    }
-                });
-        }
-
-        function exportCurrentChat() {
-            if (currentChatName) {
-                document.getElementById('exportChatSelect').value = currentChatName;
-                openModal('exportModal');
-                loadExportsList();
-            }
-        }
-
-        function loadExportsList() {
-            const pwd = getPassword();
-            if (!pwd) return;
-
-            fetch(`/list_exports?password=${encodeURIComponent(pwd)}`)
-                .then(res => res.json())
-                .then(data => {
-                    const exportsList = document.getElementById('exportsList');
-                    if (data.status === 'ok' && data.exports && data.exports.length) {
-                        let html = '<div class="list-group">';
-                        for (let exp of data.exports) {
-                            html += `<div class="list-group-item d-flex justify-content-between align-items-center">
-                                <div><strong>${escapeHtml(exp.chat_name)}</strong><br><small>${exp.date} | ${exp.messages} сообщ.</small></div>
-                                <div>
-                                    <button class="btn btn-sm btn-outline-primary" onclick="downloadExport('${escapeHtml(exp.filename)}')"><i class="bi bi-download"></i></button>
-                                    <button class="btn btn-sm btn-outline-danger" onclick="deleteExport('${escapeHtml(exp.filename)}')"><i class="bi bi-trash"></i></button>
-                                </div>
-                            </div>`;
-                        }
-                        html += '</div>';
-                        exportsList.innerHTML = html;
-                    } else {
-                        exportsList.innerHTML = '<p class="text-muted">Нет экспортированных чатов</p>';
-                    }
-                });
-
-            const exportSelect = document.getElementById('exportChatSelect');
-            const importSelect = document.getElementById('importChatSelect');
-            if (exportSelect) exportSelect.innerHTML = '<option value="">Выберите чат...</option>';
-            if (importSelect) importSelect.innerHTML = '<option value="">Выберите чат...</option>';
-            currentChats.forEach(chat => {
-                if (exportSelect) exportSelect.innerHTML += `<option value="${escapeHtml(chat.name)}">${escapeHtml(chat.name)}</option>`;
-                if (importSelect) importSelect.innerHTML += `<option value="${escapeHtml(chat.name)}">${escapeHtml(chat.name)}</option>`;
-            });
-        }
-
-        function exportChat() {
-            const chatName = document.getElementById('exportChatSelect').value;
-            const pwd = getPassword();
-            if (!chatName) { showToast('Выберите чат', 'error'); return; }
-            if (!pwd) { showToast('Введите пароль', 'error'); return; }
-
-            const formData = new FormData();
-            formData.append('password', pwd);
-            formData.append('chat_name', chatName);
-
-            fetch('/export_chat', {method: 'POST', body: formData})
-                .then(res => res.json())
-                .then(data => {
-                    const statusDiv = document.getElementById('exportStatus');
-                    if (data.status === 'ok') {
-                        if (statusDiv) {
-                            statusDiv.className = 'alert-custom alert-success-custom';
-                            statusDiv.textContent = data.message;
-                            statusDiv.style.display = 'block';
-                            setTimeout(() => { if (statusDiv) statusDiv.style.display = 'none'; }, 5000);
-                        }
-                        showToast('Экспорт завершён', 'success');
-                        loadExportsList();
-                        if (confirm('Скачать файл?')) {
-                            window.open(`/download_export?password=${encodeURIComponent(pwd)}&filename=${encodeURIComponent(data.filename)}`);
-                        }
-                    } else {
-                        if (statusDiv) {
-                            statusDiv.className = 'alert-custom alert-danger-custom';
-                            statusDiv.textContent = 'Ошибка: ' + (data.error || 'Неизвестная ошибка');
-                            statusDiv.style.display = 'block';
-                        }
-                    }
-                });
-        }
-
-        function downloadExport(filename) {
-            const pwd = getPassword();
-            if (!pwd) return;
-            window.open(`/download_export?password=${encodeURIComponent(pwd)}&filename=${encodeURIComponent(filename)}`);
-        }
-
-        function deleteExport(filename) {
-            if (!confirm('Удалить файл ' + filename + '?')) return;
-            const pwd = getPassword();
-            if (!pwd) return;
-            const formData = new FormData();
-            formData.append('password', pwd);
-            formData.append('filename', filename);
-            fetch('/delete_export', {method: 'POST', body: formData})
-                .then(res => res.json())
-                .then(data => {
-                    if (data.status === 'ok') {
-                        showToast('Файл удалён', 'success');
-                        loadExportsList();
-                    } else showToast('Ошибка: ' + (data.error || 'Неизвестная ошибка'), 'error');
-                });
-        }
-
-        function importChat() {
-            const chatName = document.getElementById('importChatSelect').value;
-            const file = document.getElementById('importFile').files[0];
-            const pwd = getPassword();
-            if (!chatName) { showToast('Выберите чат', 'error'); return; }
-            if (!file) { showToast('Выберите JSON файл', 'error'); return; }
-            if (!pwd) { showToast('Введите пароль', 'error'); return; }
-
-            const formData = new FormData();
-            formData.append('password', pwd);
-            formData.append('chat_name', chatName);
-            formData.append('mode', 'append');
-            formData.append('file', file);
-
-            const statusDiv = document.getElementById('importStatus');
-            if (statusDiv) {
-                statusDiv.style.display = 'block';
-                statusDiv.className = 'alert-custom alert-info-custom';
-                statusDiv.textContent = 'Импорт...';
-            }
-
-            fetch('/import_chat', {method: 'POST', body: formData})
-                .then(res => res.json())
-                .then(data => {
-                    if (data.status === 'ok') {
-                        if (statusDiv) {
-                            statusDiv.className = 'alert-custom alert-success-custom';
-                            statusDiv.textContent = `Импортировано ${data.imported} из ${data.total} сообщений`;
-                        }
-                        if (currentChatName === chatName) loadChatMessages(chatName, false);
-                        loadChats();
-                        showToast('Импорт завершён', 'success');
-                    } else {
-                        if (statusDiv) {
-                            statusDiv.className = 'alert-custom alert-danger-custom';
-                            statusDiv.textContent = 'Ошибка: ' + (data.error || 'Неизвестная ошибка');
-                        }
-                    }
-                });
-        }
-
-        function downloadMedia(filename, base64Data) {
-            const pwd = getPassword();
-            if (!pwd) return;
-            window.open(`/download_media?password=${encodeURIComponent(pwd)}&filename=${encodeURIComponent(filename)}&data=${encodeURIComponent(base64Data)}`);
-        }
-
-        function previewImage(src) {
-            const win = window.open('', '_blank');
-            win.document.write(`<img src="${src}" style="max-width:100%">`);
-        }
-
-        function setNewPassword(e) {
-            e.preventDefault();
-            const newPass = document.getElementById('newPassword').value;
-            const confirm = document.getElementById('newPasswordConfirm').value;
-            if (newPass !== confirm) { showToast('Пароли не совпадают', 'error'); return; }
-            if (newPass.length < 4) { showToast('Минимум 4 символа', 'error'); return; }
-
-            fetch('/register', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-                body: `password=${encodeURIComponent(newPass)}&name=USER`
-            })
+        fetch('/upload_avatar', {method: 'POST', body: formData})
             .then(res => res.json())
             .then(data => {
                 if (data.status === 'ok') {
-                    closeModal('newPasswordModal');
-                    showToast('Новый пароль установлен. Войдите с новым паролем.', 'success');
-                    logout();
+                    showToast('Аватар удалён', 'success');
+                    closeModal('avatarModal');
+                    loadChats();
+                    if (currentChatName === window.currentAvatarTarget) {
+                        loadChatMessages(currentChatName, false);
+                    }
+                } else {
+                    showToast('Ошибка: ' + data.error, 'error');
+                }
+            });
+    }
+
+    function deleteCurrentChat() {
+        if (!currentChatName) {
+            showToast('Сначала выберите чат', 'error');
+            return;
+        }
+        pendingDeleteChat = currentChatName;
+        document.getElementById('deleteChatName').textContent = currentChatName;
+        openModal('deleteChatModal');
+    }
+
+    function confirmDeleteChat() {
+        if (!pendingDeleteChat) return;
+
+        const pwd = getPassword();
+        const formData = new FormData();
+        formData.append('password', pwd);
+        formData.append('chat_name', pendingDeleteChat);
+
+        fetch('/delete_chat', {method: 'POST', body: formData})
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'ok') {
+                    showToast('Чат удалён', 'success');
+                    currentChatName = null;
+                    document.getElementById('chatName').textContent = 'Выберите чат';
+                    document.getElementById('messagesArea').innerHTML = '<div class="empty-chat"><div class="empty-chat-icon">💬</div><h5>Выберите чат</h5><p>Чтобы начать общение</p></div>';
+                    closeModal('deleteChatModal');
+                    loadChats();
+                } else {
+                    showToast('Ошибка: ' + data.error, 'error');
+                }
+            });
+    }
+
+    function sendMessage(e) {
+        e.preventDefault();
+        const chatName = document.getElementById('currentChatId').value;
+        const messageText = document.getElementById('messageText').value.trim();
+        const fileData = document.getElementById('selectedFileData').value;
+        const fileName = document.getElementById('selectedFileName').value;
+        const pwd = getPassword();
+
+        if (!chatName || (!messageText && !fileData)) return;
+        if (!pwd) { showToast('Введите пароль', 'error'); return; }
+
+        let recipientEmail = '';
+        const chat = currentChats.find(c => c.name === chatName);
+        if (chat && chat.emails && chat.emails.length) {
+            recipientEmail = chat.emails[0];
+        }
+
+        const senderEmail = currentEmails.length ? currentEmails[0].email : '';
+
+        if (!senderEmail) {
+            showToast('Добавьте почтовый ящик для отправки', 'error');
+            openModal('emailModal');
+            return;
+        }
+
+        if (!recipientEmail) {
+            showToast('Укажите email получателя', 'error');
+            return;
+        }
+
+        if (fileData && fileName) {
+            const formData = new FormData();
+            formData.append('password', pwd);
+            formData.append('chatid', chatName);
+            formData.append('recipient_email', recipientEmail);
+            formData.append('sender_email', senderEmail);
+            if (messageText) formData.append('message', messageText);
+
+            const byteString = atob(fileData);
+            const ab = new ArrayBuffer(byteString.length);
+            const ia = new Uint8Array(ab);
+            for (let i = 0; i < byteString.length; i++) ia[i] = byteString.charCodeAt(i);
+            formData.append('file', new Blob([ab]), fileName);
+
+            fetch('/send_media', {method: 'POST', body: formData})
+                .then(res => res.json())
+                .then(data => {
+                    if (data.status === 'ok') {
+                        clearFile();
+                        document.getElementById('messageText').value = '';
+                        loadChatMessages(chatName, false);
+                        showToast('Файл отправлен', 'success');
+                    } else { showToast('Ошибка: ' + (data.error || 'Неизвестная ошибка'), 'error'); }
+                });
+        } else if (messageText) {
+            const formData = new FormData();
+            formData.append('password', pwd);
+            formData.append('chatid', chatName);
+            formData.append('message', messageText);
+            formData.append('recipient_email', recipientEmail);
+            formData.append('sender_email', senderEmail);
+
+            fetch('/sendmessage', {method: 'POST', body: formData})
+                .then(res => res.json())
+                .then(data => {
+                    if (data.status === 'ok') {
+                        document.getElementById('messageText').value = '';
+                        loadChatMessages(chatName, false);
+                    } else { showToast('Ошибка: ' + (data.error || 'Неизвестная ошибка'), 'error'); }
+                });
+        }
+    }
+
+    function handleFileSelect(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+        if (file.size > 5 * 1024 * 1024) {
+            showToast('Файл слишком большой (макс 5 МБ)', 'error');
+            return;
+        }
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const base64 = e.target.result.split(',')[1];
+            document.getElementById('selectedFileData').value = base64;
+            document.getElementById('selectedFileName').value = file.name;
+            document.getElementById('filePreview').style.display = 'block';
+            document.getElementById('fileName').textContent = `${file.name} (${(file.size/1024).toFixed(1)} КБ)`;
+            document.getElementById('messageText').required = false;
+            document.getElementById('messageText').placeholder = 'Подпись к файлу (необязательно)';
+        };
+        reader.readAsDataURL(file);
+    }
+
+    function clearFile() {
+        document.getElementById('selectedFileData').value = '';
+        document.getElementById('selectedFileName').value = '';
+        document.getElementById('fileInput').value = '';
+        document.getElementById('filePreview').style.display = 'none';
+        document.getElementById('messageText').required = true;
+        document.getElementById('messageText').placeholder = 'Введите сообщение...';
+    }
+
+    function createChat(e) {
+        e.preventDefault();
+        const name = document.getElementById('newChatName').value.trim();
+        const recipientEmail = document.getElementById('recipientEmail').value.trim();
+        const pwd = getPassword();
+        if (!name) return;
+        if (!pwd) { showToast('Введите пароль', 'error'); return; }
+
+        const formData = new FormData();
+        formData.append('password', pwd);
+        formData.append('name', name);
+        if (recipientEmail) formData.append('recipient_email', recipientEmail);
+
+        fetch('/createchat', {method: 'POST', body: formData})
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'ok') {
+                    const enckey = data.enckey;
+                    const routekey = data.routekey;
+                    const route = data.route;
+                    const chatName = data.chat_name;
+                    
+                    let message = `Чат "${chatName}" создан!\n\n`;
+                    message += `🔑 КЛЮЧ ШИФРОВАНИЯ (сохраните его):\n${enckey}\n\n`;
+                    message += `📡 Маршрутный ключ: ${routekey}\n`;
+                    message += `🛣️ Маршрут: ${route}\n\n`;
+                    message += `⚠️ Этот ключ нужен вашему собеседнику для импорта чата.`;
+                    
+                    alert(message);
+                    
+                    closeModal('chatModal');
+                    document.getElementById('newChatName').value = '';
+                    document.getElementById('recipientEmail').value = '';
+                    loadChats();
                 } else {
                     showToast('Ошибка: ' + (data.error || 'Неизвестная ошибка'), 'error');
                 }
             });
-        }
+    }
 
-        function openModal(modalId) {
-            const modal = document.getElementById(modalId);
-            if (modal) modal.style.display = 'flex';
-            if (modalId === 'exportModal') {
-                loadExportsList();
+    function importChatConfig() {
+        const fileInput = document.createElement('input');
+        fileInput.type = 'file';
+        fileInput.accept = 'application/json';
+        fileInput.onchange = async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            const pwd = getPassword();
+            if (!pwd) {
+                showToast('Необходимо войти', 'error');
+                return;
             }
+            
+            const formData = new FormData();
+            formData.append('password', pwd);
+            formData.append('file', file);
+            
+            showToast('Импорт конфигурации...', 'info');
+            
+            fetch('/import_chat_config', {method: 'POST', body: formData})
+                .then(res => res.json())
+                .then(data => {
+                    if (data.status === 'ok') {
+                        showToast(`Чат "${data.chat_name}" успешно импортирован!`, 'success');
+                        loadChats();
+                    } else {
+                        showToast('Ошибка: ' + (data.error || 'Неизвестная ошибка'), 'error');
+                    }
+                })
+                .catch(err => {
+                    showToast('Ошибка сети', 'error');
+                    console.error(err);
+                });
+        };
+        fileInput.click();
+    }
+
+    function submitEmail(e) {
+        e.preventDefault();
+        const email = document.getElementById('newEmail').value.trim();
+        const apikey = document.getElementById('emailApikey').value.trim();
+        const pwd = getPassword();
+        if (!email || !apikey) return;
+        if (!pwd) { showToast('Введите пароль', 'error'); return; }
+
+        const formData = new FormData();
+        formData.append('password', pwd);
+        formData.append('email', email);
+        formData.append('apikey', apikey);
+
+        fetch('/add_email', {method: 'POST', body: formData})
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'ok') {
+                    showToast('Почта добавлена', 'success');
+                    document.getElementById('newEmail').value = '';
+                    document.getElementById('emailApikey').value = '';
+                    closeModal('emailModal');
+                    loadChats();
+                } else {
+                    showToast('Ошибка: ' + (data.error || 'Неизвестная ошибка'), 'error');
+                }
+            });
+    }
+
+    function exportCurrentChat() {
+        if (currentChatName) {
+            document.getElementById('exportChatSelect').value = currentChatName;
+            openModal('exportModal');
+            loadExportsList();
+        }
+    }
+
+    function loadExportsList() {
+        const pwd = getPassword();
+        if (!pwd) return;
+
+        fetch(`/list_exports?password=${encodeURIComponent(pwd)}`)
+            .then(res => res.json())
+            .then(data => {
+                const exportsList = document.getElementById('exportsList');
+                if (data.status === 'ok' && data.exports && data.exports.length) {
+                    let html = '<div class="list-group">';
+                    for (let exp of data.exports) {
+                        html += `<div class="list-group-item d-flex justify-content-between align-items-center">
+                            <div><strong>${escapeHtml(exp.chat_name)}</strong><br><small>${exp.date} | ${exp.messages} сообщ.</small></div>
+                            <div>
+                                <button class="btn btn-sm btn-outline-primary" onclick="downloadExport('${escapeHtml(exp.filename)}')"><i class="bi bi-download"></i></button>
+                                <button class="btn btn-sm btn-outline-danger" onclick="deleteExport('${escapeHtml(exp.filename)}')"><i class="bi bi-trash"></i></button>
+                            </div>
+                        </div>`;
+                    }
+                    html += '</div>';
+                    exportsList.innerHTML = html;
+                } else {
+                    exportsList.innerHTML = '<p class="text-muted">Нет экспортированных чатов</p>';
+                }
+            });
+
+        const exportSelect = document.getElementById('exportChatSelect');
+        const importSelect = document.getElementById('importChatSelect');
+        if (exportSelect) exportSelect.innerHTML = '<option value="">Выберите чат...</option>';
+        if (importSelect) importSelect.innerHTML = '<option value="">Выберите чат...</option>';
+        currentChats.forEach(chat => {
+            if (exportSelect) exportSelect.innerHTML += `<option value="${escapeHtml(chat.name)}">${escapeHtml(chat.name)}</option>`;
+            if (importSelect) importSelect.innerHTML += `<option value="${escapeHtml(chat.name)}">${escapeHtml(chat.name)}</option>`;
+        });
+    }
+
+    function exportChat() {
+        const chatName = document.getElementById('exportChatSelect').value;
+        const pwd = getPassword();
+        if (!chatName) { showToast('Выберите чат', 'error'); return; }
+        if (!pwd) { showToast('Введите пароль', 'error'); return; }
+
+        const formData = new FormData();
+        formData.append('password', pwd);
+        formData.append('chat_name', chatName);
+
+        fetch('/export_chat', {method: 'POST', body: formData})
+            .then(res => res.json())
+            .then(data => {
+                const statusDiv = document.getElementById('exportStatus');
+                if (data.status === 'ok') {
+                    if (statusDiv) {
+                        statusDiv.className = 'alert-custom alert-success-custom';
+                        statusDiv.textContent = data.message;
+                        statusDiv.style.display = 'block';
+                        setTimeout(() => { if (statusDiv) statusDiv.style.display = 'none'; }, 5000);
+                    }
+                    showToast('Экспорт завершён', 'success');
+                    loadExportsList();
+                    if (confirm('Скачать файл?')) {
+                        window.open(`/download_export?password=${encodeURIComponent(pwd)}&filename=${encodeURIComponent(data.filename)}`);
+                    }
+                } else {
+                    if (statusDiv) {
+                        statusDiv.className = 'alert-custom alert-danger-custom';
+                        statusDiv.textContent = 'Ошибка: ' + (data.error || 'Неизвестная ошибка');
+                        statusDiv.style.display = 'block';
+                    }
+                }
+            });
+    }
+
+    function downloadExport(filename) {
+        const pwd = getPassword();
+        if (!pwd) return;
+        window.open(`/download_export?password=${encodeURIComponent(pwd)}&filename=${encodeURIComponent(filename)}`);
+    }
+
+    function deleteExport(filename) {
+        if (!confirm('Удалить файл ' + filename + '?')) return;
+        const pwd = getPassword();
+        if (!pwd) return;
+        const formData = new FormData();
+        formData.append('password', pwd);
+        formData.append('filename', filename);
+        fetch('/delete_export', {method: 'POST', body: formData})
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'ok') {
+                    showToast('Файл удалён', 'success');
+                    loadExportsList();
+                } else showToast('Ошибка: ' + (data.error || 'Неизвестная ошибка'), 'error');
+            });
+    }
+
+    function importChat() {
+        const chatName = document.getElementById('importChatSelect').value;
+        const file = document.getElementById('importFile').files[0];
+        const pwd = getPassword();
+        if (!chatName) { showToast('Выберите чат', 'error'); return; }
+        if (!file) { showToast('Выберите JSON файл', 'error'); return; }
+        if (!pwd) { showToast('Введите пароль', 'error'); return; }
+
+        const formData = new FormData();
+        formData.append('password', pwd);
+        formData.append('chat_name', chatName);
+        formData.append('mode', 'append');
+        formData.append('file', file);
+
+        const statusDiv = document.getElementById('importStatus');
+        if (statusDiv) {
+            statusDiv.style.display = 'block';
+            statusDiv.className = 'alert-custom alert-info-custom';
+            statusDiv.textContent = 'Импорт...';
         }
 
-        function closeModal(modalId) {
-            const modal = document.getElementById(modalId);
-            if (modal) modal.style.display = 'none';
-        }
+        fetch('/import_chat', {method: 'POST', body: formData})
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'ok') {
+                    if (statusDiv) {
+                        statusDiv.className = 'alert-custom alert-success-custom';
+                        statusDiv.textContent = `Импортировано ${data.imported} из ${data.total} сообщений`;
+                    }
+                    if (currentChatName === chatName) loadChatMessages(chatName, false);
+                    loadChats();
+                    showToast('Импорт завершён', 'success');
+                } else {
+                    if (statusDiv) {
+                        statusDiv.className = 'alert-custom alert-danger-custom';
+                        statusDiv.textContent = 'Ошибка: ' + (data.error || 'Неизвестная ошибка');
+                    }
+                }
+            });
+    }
 
-        function toggleSidebar() {
-            document.getElementById('sidebar').classList.toggle('show-mobile');
-        }
+    function downloadMedia(filename, base64Data) {
+        const pwd = getPassword();
+        if (!pwd) return;
+        window.open(`/download_media?password=${encodeURIComponent(pwd)}&filename=${encodeURIComponent(filename)}&data=${encodeURIComponent(base64Data)}`);
+    }
 
-        function updateHeaderButtons(isMain) {
-            const header = document.getElementById('headerActions');
-            if (header) {
-                if (isMain) {
-                    header.innerHTML = `
-                        <button class="btn-glass" onclick="openModal('emailModal')"><i class="bi bi-envelope"></i> Почта</button>
-                        <button class="btn-glass" onclick="openModal('chatModal')"><i class="bi bi-plus-circle"></i> Чат</button>
-                        <button class="btn-glass" onclick="openModal('exportModal')"><i class="bi bi-download"></i> Экспорт</button>
-                        <button class="btn-glass" onclick="loadChats()"><i class="bi bi-arrow-repeat"></i></button>
-                        <button class="btn-glass" onclick="logout()"><i class="bi bi-box-arrow-right"></i> Выйти</button>
-                    `;
-                } else { header.innerHTML = ''; }
+    function previewImage(src) {
+        const win = window.open('', '_blank');
+        win.document.write(`<img src="${src}" style="max-width:100%">`);
+    }
+
+    function setNewPassword(e) {
+        e.preventDefault();
+        const newPass = document.getElementById('newPassword').value;
+        const confirm = document.getElementById('newPasswordConfirm').value;
+        if (newPass !== confirm) { showToast('Пароли не совпадают', 'error'); return; }
+        if (newPass.length < 4) { showToast('Минимум 4 символа', 'error'); return; }
+
+        fetch('/register', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: `password=${encodeURIComponent(newPass)}&name=USER`
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === 'ok') {
+                closeModal('newPasswordModal');
+                showToast('Новый пароль установлен. Войдите с новым паролем.', 'success');
+                logout();
+            } else {
+                showToast('Ошибка: ' + (data.error || 'Неизвестная ошибка'), 'error');
             }
-        }
+        });
+    }
 
-        function logout() {
-            isLoggedIn = false;
-            if (refreshTimer) clearInterval(refreshTimer);
-            clearPassword();
-            currentChatName = null;
-            currentChats = [];
-            document.getElementById('authSection').style.display = 'block';
-            document.getElementById('mainSection').style.display = 'none';
-            document.getElementById('authPassword').value = '';
-            document.getElementById('setupName').value = '';
-            document.getElementById('confirmPassword').value = '';
-            document.getElementById('authMessage').style.display = 'none';
-            showToast('Вы вышли из системы', 'info');
-            checkServerState();
+    function openModal(modalId) {
+        const modal = document.getElementById(modalId);
+        if (modal) modal.style.display = 'flex';
+        if (modalId === 'exportModal') {
+            loadExportsList();
         }
+    }
 
+    function closeModal(modalId) {
+        const modal = document.getElementById(modalId);
+        if (modal) modal.style.display = 'none';
+    }
+
+    function toggleSidebar() {
+        document.getElementById('sidebar').classList.toggle('show-mobile');
+    }
+
+    function updateHeaderButtons(isMain) {
+        const header = document.getElementById('headerActions');
+        if (header) {
+            if (isMain) {
+                header.innerHTML = `
+                    <button class="btn-glass" onclick="openModal('emailModal')"><i class="bi bi-envelope"></i> Почта</button>
+                    <button class="btn-glass" onclick="openModal('chatModal')"><i class="bi bi-plus-circle"></i> Чат</button>
+                    <button class="btn-glass" onclick="openModal('exportModal')"><i class="bi bi-download"></i> Экспорт</button>
+                    <button class="btn-glass" onclick="importChatConfig()"><i class="bi bi-upload"></i> Импорт чата</button>
+                    <button class="btn-glass" onclick="loadChats()"><i class="bi bi-arrow-repeat"></i></button>
+                    <button class="btn-glass" onclick="logout()"><i class="bi bi-box-arrow-right"></i> Выйти</button>
+                `;
+            } else { header.innerHTML = ''; }
+        }
+    }
+
+    function logout() {
+        isLoggedIn = false;
+        if (refreshTimer) clearInterval(refreshTimer);
+        clearPassword();
+        currentChatName = null;
+        currentChats = [];
+        document.getElementById('authSection').style.display = 'block';
+        document.getElementById('mainSection').style.display = 'none';
+        document.getElementById('authPassword').value = '';
+        document.getElementById('setupName').value = '';
+        document.getElementById('confirmPassword').value = '';
+        document.getElementById('authMessage').style.display = 'none';
+        showToast('Вы вышли из системы', 'info');
         checkServerState();
-    </script>
+    }
+
+    checkServerState();
+</script>
+<div class="toast-container" id="toastContainer"></div>
 </body>
 </html>
